@@ -36,23 +36,30 @@ class Weight_Fix_Base(pl.LightningModule):
         self.end_distance = 0.01
         self.clusters = 1
         self.iterations = 10
-
+        self.is_fixed = []
+        self.t = 1
+        self.encourage_plus_one_cluster = True
+        self.gamma = 0.25
 
     def set_clusters(self, iterations, number_of_clusters):
         self.clusters = 1
         self.cluster_increase = math.floor(number_of_clusters / iterations)
 
 
-    def set_up(self, number_cluster_bits, end_distance, distance_change, iterations, weight_entropy_reg):
+    def set_up(self, number_cluster_bits, end_distance, distance_change, iterations, t, gamma, encourage_plus_one_cluster):
         self.set_layer_shapes()
         self.set_inital_weights()
         self.set_up_fixed_weight_array()
         self.set_optim()
+        self.encourage_plus_one_cluster = encourage_plus_one_cluster
         self.cluster_bit_fix = number_cluster_bits
         self.end_distance = end_distance
         self.distance_change = distance_change
         self.iterations = iterations
-        self.weight_entropy_reg = weight_entropy_reg
+        self.fixed_center_list = torch.Tensor([[0]]).to(self.device)
+        self.t = t
+        self.gamma = gamma
+        self.get_cluster_assignment_prob()
 
     def set_up_fixed_weight_array(self):
         self.fixed_weights = []
@@ -70,7 +77,6 @@ class Weight_Fix_Base(pl.LightningModule):
     def reset_weights(self):
         for i, (n, p) in enumerate(self.named_parameters()):
             print('percentage=',  np.sum(self.is_fixed[i]) / len(self.is_fixed[i].flatten()))
-
             if 'final' in n:
                 p.data[np.where(self.is_fixed[i])] = torch.Tensor(self.fixed_weights[i][np.where(self.is_fixed[i])]).to(self.device)
             else:
@@ -104,19 +110,22 @@ class Weight_Fix_Base(pl.LightningModule):
             }]
         return [self.optim], schedulers
 
-    def entropy_of_weights(self):
-        w = self.flatten_the_network(True)
-        p = w/w.sum()
-        print(torch.distributions.Categorical(p), p)
-        return torch.distributions.Categorical(p).entropy()
-
+    def get_cluster_assignment_prob(self):
+        distances, weights = self.calculate_distance_from_clusters()
+        e = 0.0000001
+        if len(distances.size()) < 2:
+            distances = distances.unsqueeze(dim = 0)
+        d = torch.sum(torch.exp(distances / self.t), axis = 1)
+        s = 1 - (torch.exp(distances / self.t).T / d + e).T
+        return torch.mean(torch.sum(torch.square(s * distances), axis = 1))
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         if self.reference_image is None:
             self.reference_image = x[0]
         y_hat = self(x)
-        loss = F.cross_entropy(y_hat, y)
+        cluster_error = self.get_cluster_assignment_prob()
+        loss = F.cross_entropy(y_hat, y) + self.gamma*cluster_error
         result = pl.TrainResult(loss)
         acc = FM.accuracy(y_hat, y)
         result.log_dict({'train_acc':acc, 'train_loss':loss}, prog_bar=True, logger = False)
@@ -180,15 +189,32 @@ class Weight_Fix_Base(pl.LightningModule):
             weights = None
             for n, p in self.named_parameters():
                 if weights is None:
-                    weights = p.data.flatten()
+                    weights = torch.flatten(p)
                 else:
-                    weigh1ts = torch.cat([weights, p.data.flatten()])
+                    weights = torch.cat([weights,torch.flatten(p)])
             return weights
 
+    def flatten_is_fixed(self):
+       return np.concatenate([i.flatten() for i in self.is_fixed])
 
+    def calculate_distance_from_clusters(self):
+        weights = self.flatten_the_network(True)
+        f = self.flatten_is_fixed()
+        weights = weights[~self.flatten_is_fixed()]
+        distances = None
+        for t in range(self.fixed_center_list.size()[1]):
+            dist = torch.square(weights - self.fixed_center_list[0,t])
+            if distances is None: ## need to tidy this up
+                distances = dist
+            else:
+                try:
+                    distances = torch.stack([distances, dist], dim = 1)
+                except:
+                    dist = dist.unsqueeze(dim = 1)
+                    distances = torch.cat([distances, dist], dim = 1)
+        return distances, weights
 
     def summarise_clusters_selected(self, centroids, distances):
-
         if not self.outer_logger is None:
            self.outer_logger.experiment.add_scalar("Clusters/max_distance", np.max(distances), self.fixing_iteration)
            self.outer_logger.experiment.add_scalar("Clusters/median_distance", np.median(distances), self.fixing_iteration)
@@ -223,23 +249,17 @@ class Weight_Fix_Base(pl.LightningModule):
         distance_allowed = self.end_distance + (self.iterations - self.fixing_iteration)*self.distance_change
         print('The distance allowed is ', distance_allowed)
         centroids = np.expand_dims(self.get_centroids(weights, self.clusters, distance_allowed), axis = 0) # Get the n centroids based the weight distributions
-        print('The centroids = ', centroids)
+        if not self.encourage_plus_one_cluster:
+            self.fixed_center_list = torch.Tensor(centroids).to(self.device)
+        print('Centroids optimising for ', self.fixed_center_list[0])
         distances = np.abs(weights - centroids.transpose()).transpose() # calculate the distance for all weights from these centroids
         closest_distance = np.min(distances, axis = 1) # what is the distance to the closest centroid for each weight
-
         if percentage != 1.0:
             idx = self.select_layer_wise(closest_distance, distance_allowed, percentage)
-#            possible_choices = (closest_distance - distance_allowed) < 0
-#            if np.sum(possible_choices) > number_fixed:
-                #idx = np.random.choice(np.where(possible_choices)[0], size = number_fixed)
-#            else:
-#                idx = np.argpartition(closest_distance, number_fixed)[:number_fixed] # take the number_fixed smallest distance weights
         else:
            idx = range(number_fixed)
-
         val = np.abs(np.median(closest_distance[idx]))  + np.std(closest_distance[idx])
-
-        print('d val', val)
+        print('Distance value ', val)
         if val > distance_allowed:
              self.clusters += 1
              print('INCREASING CLUSTERS', val, ' ', self.clusters)
@@ -255,7 +275,6 @@ class Weight_Fix_Base(pl.LightningModule):
         return weights, idx, clustered
 
     def cluster_prune(self, clusters):
-
         count = 0
         weights, idx, clustered = self.push_to_clusters(self.flatten_the_network(), self.percentage_fixed)
         fixed = 0
@@ -289,12 +308,16 @@ class Weight_Fix_Base(pl.LightningModule):
         e = 1e-10
         digitized = np.histogram(weights, bins, weights = weights, density=False)[0]
 
+        clusters += 1 # we take an extra cluster centroid but this is just for the loss term
         if bins > clusters:
-            idx = np.argpartition(np.abs(digitized), -clusters)[-clusters:]
+            idx = np.argpartition(np.abs(digitized), -clusters)[-(clusters):]
         else:
             idx = range(len(weights))
         digitized = digitized / (np.histogram(weights, bins)[0] + e)
-        selected = digitized[idx]
+        selected = digitized[idx[1:]] # we take all by the last to be our clusters
+        if self.encourage_plus_one_cluster:
+            self.fixed_center_list = torch.Tensor([digitized[idx]]).to(self.device)
+        print('Centroids selected ', selected)
         return selected
 
     def histedges_equalN(self, x, nbin):
