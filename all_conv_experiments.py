@@ -17,8 +17,8 @@ import argparse
 #first_last_epochs = 20
 #rest_epochs = 5
 
-def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_limit, distance_change, bits, distance_type = 'med+std'):
-    experiment_name = f'experiment={experiment_name}-model={model.name}-data={data.name}-distance_limit={distance_limit}-distance_change={distance_change}-cluster_bits={bits}-percentages={percentages}-first_epoch={first_last_epochs}-fixing_epochs={rest_epochs}'
+def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_limit, distance_change, bits,t, gamma,  encourage_plus_one_cluster):
+    experiment_name = f'e={experiment_name}-m={model.name}-d={data.name}-t={t}-g={gamma}-p1c={encourage_plus_one_cluster}-dl={distance_limit}-dc={distance_change}-cb={bits}-%={percentages}-e1={first_last_epochs}-fe={rest_epochs}'
     dr = f'{os.getcwd()}/experiments/{experiment_name}'
     if not os.path.exists(dr):
         os.makedirs(dr)
@@ -71,22 +71,25 @@ def main(args):
     for c in args.change_to_try:
         for lim in args.limits_to_try:
             model = All_Conv_4()
-            model.set_up(args.bits, lim, c, len(args.percentages), args.weight_entropy_reg)
-            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, lim, c, args.bits)
+            model.set_up(args.bits, lim, c, len(args.percentages), args.t, args.gamma, args.encourage_plus_one_cluster)
+            model.flatten_is_fixed()
+            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, lim, c, args.bits, args.t, args.gamma, args.encourage_plus_one_cluster)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 #    limits = [round(x*1e-4, 4) for x in range(min_lim, max_lim, change)]
 #    changes = [round(x*1e-4, 4) for x in range(min_change, max_change, change)]
-    parser.add_argument('--limits_to_try',  nargs='+', type=float)
-    parser.add_argument('--change_to_try', nargs='+', type=float)
-    parser.add_argument('--percentages', nargs='+', type=float)
-    parser.add_argument('--first_epoch', type=int)
-    parser.add_argument('--fixing_epochs', type=int)
-    parser.add_argument('--bits', type=int)
-    parser.add_argument('--name')
-    parser.add_argument('--weight_entropy_reg', type=float)
+    parser.add_argument('--limits_to_try',  nargs='+', type=float, default = [0.001])
+    parser.add_argument('--change_to_try', nargs='+', type=float, default = [0.0001])
+    parser.add_argument('--percentages', nargs='+', type=float, default = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
+    parser.add_argument('--first_epoch', type=int, default = 40)
+    parser.add_argument('--fixing_epochs', type=int, default = 25)
+    parser.add_argument('--bits', type=int, default = 32)
+    parser.add_argument('--name', default = "testing")
+    parser.add_argument('--encourage_plus_one_cluster', default = False, type= bool)
+    parser.add_argument('--gamma', default = 0.35, type=float)
+    parser.add_argument('--t', default = 0.50, type = float)
     args = parser.parse_args()
     print(args)
     main(args)
