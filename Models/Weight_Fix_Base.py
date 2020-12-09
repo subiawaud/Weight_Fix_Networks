@@ -40,17 +40,20 @@ class Weight_Fix_Base(pl.LightningModule):
         self.t = 1
         self.encourage_plus_one_cluster = True
         self.gamma = 0.25
+        self.gradients = None
 
     def set_clusters(self, iterations, number_of_clusters):
         self.clusters = 1
         self.cluster_increase = math.floor(number_of_clusters / iterations)
 
+    def reset_optim(self, max_epochs):
+        self.max_epochs = max_epochs
+        self.set_optim()
 
     def set_up(self, number_cluster_bits, end_distance, distance_change, iterations, t, gamma, encourage_plus_one_cluster):
         self.set_layer_shapes()
         self.set_inital_weights()
         self.set_up_fixed_weight_array()
-        self.set_optim()
         self.encourage_plus_one_cluster = encourage_plus_one_cluster
         self.cluster_bit_fix = number_cluster_bits
         self.end_distance = end_distance
@@ -100,15 +103,19 @@ class Weight_Fix_Base(pl.LightningModule):
     def set_optim(self):
         return
 
-
     def configure_optimizers(self):
-        schedulers = [{
+        scheduler = {
             'scheduler':self.scheduler,
-            'monitor':'loss',
-            'interval':'epoch',
-            'frequency':1
-            }]
-        return [self.optim], schedulers
+            'name':'learning_rate',
+            'interval':'step',
+            }
+        print(self.optim)
+        if self.scheduler is not None:
+            print('SCHEDULER')
+            return [self.optim], [scheduler]
+        else:
+            print('no scheduler')
+            return [self.optim]
 
     def get_cluster_assignment_prob(self):
         distances, weights = self.calculate_distance_from_clusters()
@@ -293,6 +300,7 @@ class Weight_Fix_Base(pl.LightningModule):
              v.grad.data[np.where(self.is_fixed[i])] = torch.zeros_like(v.grad.data[np.where(self.is_fixed[i])])
 
 
+
     def round_to_precision(self, centroids):
         if self.cluster_bit_fix == 32:
            return centroids
@@ -301,22 +309,31 @@ class Weight_Fix_Base(pl.LightningModule):
         else:
            raise ValueError
 
+
+    def move_smallest_to_zero(self, selected): #we move the smallest centroid to zero
+        s_index = np.argmin(np.abs(selected))
+        selected[s_index] = 0
+        return selected
+
     def get_centroids(self, weights, clusters, distance):
-        bins = int((np.max(weights) - np.min(weights)) / (distance*2))
-        if bins < clusters:
+        bins = [(i*distance) for i in range(int(-np.max(weights)//distance*2),int(np.max(weights)//distance*2))]
+        del bins[bins.index(0)-4: bins.index(0)+5] # we remove the bin options around zero
+        if len(bins) < clusters:
             bins = clusters
         e = 1e-10
         digitized = np.histogram(weights, bins, weights = weights, density=False)[0]
 
         clusters += 1 # we take an extra cluster centroid but this is just for the loss term
-        if bins > clusters:
+        if len(bins) > clusters:
             idx = np.argpartition(np.abs(digitized), -clusters)[-(clusters):]
         else:
             idx = range(len(weights))
-        digitized = digitized / (np.histogram(weights, bins)[0] + e)
-        selected = digitized[idx[1:]] # we take all by the last to be our clusters
+
+        digitized = digitized / (np.histogram(weights, bins)[0]+e)
+        selected = self.move_smallest_to_zero(digitized[idx[1:]]) # we take all but the last to be our clusters
+
         if self.encourage_plus_one_cluster:
-            self.fixed_center_list = torch.Tensor([digitized[idx]]).to(self.device)
+            self.fixed_center_list = torch.Tensor([self.move_smallest_to_zero(digitized[idx])]).to(self.device)
         print('Centroids selected ', selected)
         return selected
 
