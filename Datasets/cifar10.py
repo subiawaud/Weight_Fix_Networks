@@ -1,4 +1,4 @@
-import pytorch_lightning as pl 
+import pytorch_lightning as pl
 from torch.utils.data import random_split, DataLoader
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
@@ -8,12 +8,12 @@ class CIFAR10DataModule(pl.LightningDataModule):
         def __init__(self, data_dir: str = 'Datasets/', shuffle_pixels=False, shuffle_labels=False, random_pixels=False):
                 super().__init__()
                 self.data_dir = data_dir
-                self.old_normalise = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-                self.noise_normalise = transforms.Normalize(mean=[x/255.0 for x in [125.3, 123.0, 113.9]], std=[x / 255.0 for x in [63.0, 62.1, 66.7]])
+                self.normalise = transforms.Normalize(mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010])
                 self.transform = self.transform_select(shuffle_pixels, random_pixels)
                 self.target_transform = self.target_transform_select(shuffle_labels)
+                self.targets = 10
                 self.dims = (3,32,32)
-                self.bs = 64
+                self.bs = 256
                 self.name = 'CIFAR10'
 
         def target_transform_select(self, shuffle_labels = False):
@@ -21,32 +21,31 @@ class CIFAR10DataModule(pl.LightningDataModule):
                 target_transform = lambda y: torch.randint(0, 10, (1,)).item()
                 return target_transform
              else:
-                return None 
+                return None
 
         def transform_select(self, shuffle_pixels = False, random_pixels=False):
              if shuffle_pixels:
                 permute_pixels_transform = lambda x: self.permute_pixels(x)
                 return transforms.Compose([
                         transforms.ToTensor(),
-                        self.noise_normalise,
+                        self.normalise,
                         permute_pixels_transform])
 
              elif random_pixels:
                 random_pixel_transform = lambda x: torch.rand(x.size())
                 return transforms.Compose([
                         transforms.ToTensor(),
-                        self.noise_normalise,
-                        random_pixel_transform])  
+                        self.normalise,
+                        random_pixel_transform])
 
              else:
                 return transforms.Compose([
-                        transforms.RandomVerticalFlip(0.1), 
-                        transforms.RandomHorizontalFlip(0.3),
-                        transforms.RandomAffine(degrees = 15, translate=[0.1, 0.1], scale=(0.95, 1.05)),
+                        transforms.RandomCrop(32, padding=4),
+                        transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
-                        self.noise_normalise])
+                        self.normalise])
 
- 
+
         def permute_pixels(self, x):
              idx = torch.randperm(x.nelement())
              x = x.view(-1)[idx].view(x.size())
@@ -69,8 +68,6 @@ class CIFAR10DataModule(pl.LightningDataModule):
 
         def val_dataloader(self):
                 return DataLoader(self.val, batch_size=self.bs, num_workers = 6)
-        
+
         def test_dataloader(self):
                 return DataLoader(self.test, batch_size=self.bs, num_workers = 6)
-
-                                 
