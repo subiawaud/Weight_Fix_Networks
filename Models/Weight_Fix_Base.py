@@ -5,18 +5,15 @@ import torch
 import abc
 import numpy as np
 import torch.nn as nn
-from groupy.gconv.pytorch_gconv.splitgconv2d import P4ConvZ2, P4ConvP4, P4MConvZ2, P4MConvP4M
-from groupy.gconv.pytorch_gconv.pooling import plane_group_spatial_max_pooling
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import torch.nn.utils.prune as prune
 from pytorch_lightning.metrics import functional as FM
 import matplotlib.pyplot as plt
-import kmeans1d
 from scipy.stats import binned_statistic
 
 
-LAYERS_PRUNED = (nn.Conv1d, nn.Conv2d, nn.Conv3d, P4ConvZ2, P4ConvP4, P4MConvZ2, P4MConvP4M, nn.Linear)
+LAYERS_PRUNED = (nn.Conv1d, nn.Conv2d, nn.Conv3d)
 
 class Weight_Fix_Base(pl.LightningModule):
     __metaclass_= abc.ABCMeta

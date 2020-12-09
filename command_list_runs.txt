@@ -1,1 +1,0 @@
-python all_conv_experiments.py --limits_to_try 0.002 0.0025 --change_to_try 0.0001 0.005 --percentages 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 -first_epoch 1 fixing_epochs 1 --bits 16 --name "testing_argparse"

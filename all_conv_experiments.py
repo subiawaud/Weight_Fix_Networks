@@ -18,7 +18,7 @@ import argparse
 #rest_epochs = 5
 
 def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_limit, distance_change, bits,t, gamma,  encourage_plus_one_cluster):
-    experiment_name = f'e={experiment_name}-m={model.name}-d={data.name}-t={t}-g={gamma}-p1c={encourage_plus_one_cluster}-dl={distance_limit}-dc={distance_change}-cb={bits}-%={percentages}-e1={first_last_epochs}-fe={rest_epochs}'
+    experiment_name = f'e={experiment_name}-m={model.name}-d={data.name}-t={t}-g={gamma}-p1c={encourage_plus_one_cluster}-dl={distance_limit}-dc={distance_change}-cb={bits}-e1={first_last_epochs}-fe={rest_epochs}'
     dr = f'{os.getcwd()}/experiments/{experiment_name}'
     if not os.path.exists(dr):
         os.makedirs(dr)

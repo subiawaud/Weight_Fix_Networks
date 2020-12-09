@@ -16,5 +16,5 @@ params = list(itertools.product(*[percentages, limits, changes, first_epochs, re
 print(len(params))
 for param_set in params:
          percentage, limit, c, f_e, r_e, b, t, gamma, epoc = param_set
-         script_test =f'python all_conv_experiments.py --encourage_plus_one_cluster {epoc} --t {t} --gamma {gamma} --limits_to_try {limit} --change_to_try {c} --percentages {percentage} --first_epoch {f_e} --fixing_epochs {r_e} --bits {b} --name "testing_argparse" '
-         os.system(script_test)
+         script_test =f'--encourage_plus_one_cluster {epoc} --t {t} --gamma {gamma} --limits_to_try {limit} --change_to_try {c} --percentages {percentage} --first_epoch {f_e} --fixing_epochs {r_e} --bits {b} --name "testing_argparse" '
+         os.system('sbatch script.sh ' script_test)
