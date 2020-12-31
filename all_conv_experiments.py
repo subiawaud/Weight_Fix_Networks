@@ -8,15 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 
-#limits_to_try = [round(x*1e-4, 4) for x in range(18, 34, 2)]
-#change_to_try = [0.0001, 0.00015, 0.00005]
-
-# if you don't get good results - remove 0.995 and 0.9975
-#percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999, 1.0]
-#percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] <- to try
-#first_last_epochs = 20
-#rest_epochs = 5
-
 def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_limit, distance_change, bits,t, gamma,  encourage_plus_one_cluster):
     experiment_name = f'e={experiment_name}-m={model.name}-d={data.name}-t={t}-g={gamma}-p1c={encourage_plus_one_cluster}-dl={distance_limit}-dc={distance_change}-cb={bits}-e1={first_last_epochs}-fe={rest_epochs}'
     dr = f'{os.getcwd()}/experiments/{experiment_name}'
@@ -80,17 +71,15 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-#    limits = [round(x*1e-4, 4) for x in range(min_lim, max_lim, change)]
-#    changes = [round(x*1e-4, 4) for x in range(min_change, max_change, change)]
     parser.add_argument('--limits_to_try',  nargs='+', type=float, default = [0.001])
     parser.add_argument('--change_to_try', nargs='+', type=float, default = [0.0002])
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
-    parser.add_argument('--first_epoch', type=int, default = 1)
+    parser.add_argument('--first_epoch', type=int, default = 25)
     parser.add_argument('--fixing_epochs', type=int, default = 5)
-    parser.add_argument('--bits', type=int, default = 32)
+    parser.add_argument('--bits', default = 'pow_2')
     parser.add_argument('--name', default = "testing")
     parser.add_argument('--encourage_plus_one_cluster', default = True, type= bool)
-    parser.add_argument('--gamma', default = 0.5, type=float)
+    parser.add_argument('--gamma', default = 5, type=float)
     parser.add_argument('--t', default = 0.50, type = float)
     args = parser.parse_args()
     print(args)
