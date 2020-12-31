@@ -1,14 +1,12 @@
 import math
 import seaborn as sns
 import copy
-import torch 
+import torch
 import numpy as np
 from Models.Weight_Fix_Base import Weight_Fix_Base
 import torch.nn as nn
-from groupy.gconv.pytorch_gconv.splitgconv2d import P4ConvZ2, P4ConvP4
-from groupy.gconv.pytorch_gconv.pooling import plane_group_spatial_max_pooling
 import torch.nn.functional as F
-import pytorch_lightning as pl 
+import pytorch_lightning as pl
 import torch.nn.utils.prune as prune
 from pytorch_lightning.metrics import functional as FM
 import matplotlib.pyplot as plt
@@ -150,7 +148,7 @@ class ResNet(Weight_Fix_Base):
         self.final = nn.Linear(512 * block.expansion, num_classes)
         self.name = f'ResNet_{layers}'
         self.forward_order = [self.conv1, self.bn1, self.relu, self.maxpool, self.layer1, self.layer2, self.layer3, self.layer4, self.avgpool]
-       
+
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -168,14 +166,18 @@ class ResNet(Weight_Fix_Base):
                     nn.init.constant_(m.bn3.weight, 0)
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
-                    
     def set_optim(self):
-           self.optim = torch.optim.SGD(self.parameters(), lr = 0.1)
-           self.scheduler = torch.optim.lr_scheduler.StepLR(
-                 self.optim, 
-                 step_size=25, 
-                 gamma=0.1) 
-                 
+        self.optim = torch.optim.SGD(self.parameters(), lr=0.01,
+                      momentum=0.9, weight_decay=5e-4)
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optim, T_max=50)
+
+    #def set_optim(self):
+    #       self.optim = torch.optim.SGD(self.parameters(), lr = 0.1)
+    #       self.scheduler = torch.optim.lr_scheduler.StepLR(
+    #             self.optim,
+    #             step_size=10,
+    #             gamma=0.1)
+
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
         downsample = None
@@ -342,4 +344,3 @@ def wide_resnet101_2(pretrained=False, progress=True, **kwargs):
     kwargs['width_per_group'] = 64 * 2
     return _resnet('wide_resnet101_2', Bottleneck, [3, 4, 23, 3],
                    pretrained, progress, **kwargs)
-

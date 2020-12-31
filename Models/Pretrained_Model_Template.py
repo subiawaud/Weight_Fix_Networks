@@ -18,7 +18,7 @@ class Pretrained_Model_Template(Weight_Fix_Base):
         dim_in = [3,32,32]
         self.pretrained = original_model
         self.max_epochs = max_epochs
-        self.lr = 1e-4
+        self.lr = 1e-5
         self.weight_decay = 1e-4
         self.batch_size = data_module.bs
         self.train_size = len(data_module.train_dataloader().dataset)
