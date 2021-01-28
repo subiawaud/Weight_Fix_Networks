@@ -166,6 +166,7 @@ class ResNet(Weight_Fix_Base):
                     nn.init.constant_(m.bn3.weight, 0)
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
+                    
     def set_optim(self):
         self.optim = torch.optim.SGD(self.parameters(), lr=0.01,
                       momentum=0.9, weight_decay=5e-4)
