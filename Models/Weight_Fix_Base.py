@@ -83,7 +83,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name):
         fixed_params = self.get_number_of_u_params()
         fixed_entropy = self.get_weight_entropy()
-        self.metric_logger.write_to_results_file(exp_name, self.name, self.regularistion_ratio,
+        self.metric_logger.write_to_results_file(exp_name, self.name, self.regularisation_ratio,
         self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_params, data_name)
 
 
