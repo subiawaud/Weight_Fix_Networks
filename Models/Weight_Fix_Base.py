@@ -9,95 +9,102 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 import torch.nn.utils.prune as prune
 from pytorch_lightning.metrics import functional as FM
+from Models.CaptureOutputs import CaptureOutputs
 import matplotlib.pyplot as plt
 from scipy.stats import binned_statistic
+from Utility.Cluster_Determination import Cluster_Determination
+from Utility.Converter import Converter
+from Utility.Distance_Calculation import Distance_Calculation
+from Utility.Flattener import Flattener
+from Utility.Metric_Capture import Metric_Capture
+from Utility.Parameter_Iterator import *
+from scipy.stats import entropy
 
+LAYERS_FIXED = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
 
-LAYERS_PRUNED = (nn.Conv1d, nn.Conv2d, nn.Conv3d)
 
 class Weight_Fix_Base(pl.LightningModule):
-    __metaclass_= abc.ABCMeta
+    __metaclass_= abc.ABCMeta # to allow for abstract method implementations
     def __init__(self):
         super(Weight_Fix_Base, self).__init__()
-        self.reference_image = None
-        self.fixing_iteration = 0
-        self.name = 'Base'
-        self.optim = None
-        self.outer_logger = None
-        self.optim = None
-        self.scheduler = None
+        self.current_fixing_iteration = 0 # which iteration of the fixing algorithm are we at
+        self.name = 'Base'  # object name
+        self.tracking_gradients = False
         self.percentage_fixed = 0
-        self.cluster_bit_fix = 32
-        self.hist_epoch_log = 10
-        self.distance_change = 0.01
-        self.end_distance = 0.01
-        self.clusters = 1
-        self.iterations = 10
-        self.is_fixed = []
-        self.t = 1
-        self.encourage_plus_one_cluster = True
-        self.gamma = 0.25
-        self.gradients = None
-
-    def set_clusters(self, iterations, number_of_clusters):
-        self.clusters = 1
-        self.cluster_increase = math.floor(number_of_clusters / iterations)
 
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs
-        self.set_optim()
+        self.set_optim(max_epochs)
 
-    def set_up(self, number_cluster_bits, end_distance, distance_change, iterations, t, gamma, encourage_plus_one_cluster):
+    def set_loggers(self, inner, outer):
+        self.metric_logger.set_loggers(inner, outer)
+
+    def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised):
+        self.parameter_iterator = Parameter_Iterator(self, LAYERS_FIXED)
         self.set_layer_shapes()
-        self.set_inital_weights()
         self.set_up_fixed_weight_array()
-        self.encourage_plus_one_cluster = encourage_plus_one_cluster
-        self.cluster_bit_fix = number_cluster_bits
-        self.end_distance = end_distance
-        self.distance_change = distance_change
-        self.iterations = iterations
-        self.fixed_center_list = torch.Tensor([[0]]).to(self.device)
-        self.t = t
-        self.gamma = gamma
-        self.get_cluster_assignment_prob()
+        self.set_inital_weights()
+        self.calculation_type = distance_calculation_type
+        self.distance_calculator = Distance_Calculation(self.calculation_type)
+        self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
+        self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener)
+        self.metric_logger = Metric_Capture(self)
+        self.converter = Converter(cluster_bit_fix, distance_calculation_type)
+        self.smallest_distance_allowed = smallest_distance_allowed
+        self.cluster_bit_fix = cluster_bit_fix
+        self.number_of_fixing_iterations = number_of_fixing_iterations
+        self.how_many_iterations_not_regularised = how_many_iterations_not_regularised
+        self.centroid_list = torch.Tensor([[0]]).to(self.device)
+        self.regularisation_ratio = regularisation_ratio
+        self.number_of_clusters = 1
 
     def set_up_fixed_weight_array(self):
-        self.fixed_weights = []
-        self.is_fixed = []
-        for n,p in self.named_parameters():
-            zeros = np.zeros_like(p.data.detach().numpy())
-            self.fixed_weights.append(zeros)
-            self.is_fixed.append(np.array(zeros > 0))
+        self.fixed_weights = self.parameter_iterator.iteratate_all_parameters_and_append([], append_zeros=True)
+        self.is_fixed = self.parameter_iterator.iteratate_all_parameters_and_append([], append_bool = True)
+        self.grads = self.parameter_iterator.iteratate_all_parameters_and_append([], append_zeros=True)
 
     def set_inital_weights(self):
-        self.initial_weights = []
-        for i, (n, p) in enumerate(self.named_parameters()):
-            self.initial_weights.append(copy.deepcopy(p.data))
+        self.initial_weights = self.parameter_iterator.iteratate_all_parameters_and_append([], to_copy = True, append_parameters = True)
 
     def reset_weights(self):
-        for i, (n, p) in enumerate(self.named_parameters()):
-            print('percentage=',  np.sum(self.is_fixed[i]) / len(self.is_fixed[i].flatten()))
-            if 'final' in n:
-                p.data[np.where(self.is_fixed[i])] = torch.Tensor(self.fixed_weights[i][np.where(self.is_fixed[i])]).to(self.device)
-            else:
-                new_param = self.fixed_weights[i][np.where(self.is_fixed[i])]# [self.is_fixed[i]]
-                p.data[np.where(self.is_fixed[i])] = torch.Tensor(new_param).to(self.device)#.flatten()
-            with torch.no_grad():
-                 self.state_dict()[n] = p.data
+        i = 0
+        for n, m in self.named_modules():
+         if isinstance(m, LAYERS_FIXED):
+             for n, p in m.named_parameters():
+                new_param = self.fixed_weights[i][torch.where(self.is_fixed[i])]# [self.is_fixed[i]]
+                p.data[torch.where(self.is_fixed[i])] = new_param # torch.Tensor(new_param).to(self.device)#.flatten()
+                i += 1
+                with torch.no_grad():
+                     self.state_dict()[n] = p.data
 
     def set_layer_shapes(self):
         self.layer_shapes = self.get_layer_shapes()
 
+    def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name):
+        fixed_params = self.get_number_of_u_params()
+        fixed_entropy = self.get_weight_entropy()
+        self.metric_logger.write_to_results_file(exp_name, self.name, self.regularisation_ratio,
+        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_params, data_name)
+
+
+    def get_number_of_u_params(self):
+        return len(np.unique(self.flattener.flatten_network_numpy()))
+
+    def get_weight_entropy(self):
+        v, c = np.unique(self.flattener.flatten_network_numpy(), return_counts = True)
+        c = np.array(c) / np.sum(c)
+        return entropy(c, base=2)
+
     def on_epoch_start(self):
         if self.current_epoch == 0:
-            self.custom_histogram_adder(-10)
+            print('starting')
 
     @abc.abstractmethod
     def forward(self, x):
         return
 
     @abc.abstractmethod
-    def set_optim(self):
+    def set_optim(self, epochs):
         return
 
     def configure_optimizers(self):
@@ -106,239 +113,185 @@ class Weight_Fix_Base(pl.LightningModule):
             'name':'learning_rate',
             'interval':'step',
             }
-        print(self.optim)
+
         if self.scheduler is not None:
-            print('SCHEDULER')
             return [self.optim], [scheduler]
         else:
             print('no scheduler')
             return [self.optim]
 
-    def get_cluster_assignment_prob(self):
-        distances, weights = self.calculate_distance_from_clusters()
-        e = 0.0000001
-        if len(distances.size()) < 2:
-            distances = distances.unsqueeze(dim = 0)
-        d = torch.sum(torch.exp(distances / self.t), axis = 1)
-        s = 1 - (torch.exp(distances / self.t).T / d + e).T
-        return torch.mean(torch.sum(torch.square(s * distances), axis = 1))
+    def calculate_cluster_error_alpha(self, ce, cluster_error):
+        if self.current_fixing_iteration > self.number_of_fixing_iterations - self.how_many_iterations_not_regularised:
+            return 0
+        else:
+#            increase_factor = (self.number_of_fixing_iterations - self.current_fixing_iteration)
+            alpha = ((self.regularisation_ratio*ce)/cluster_error).detach().clone().to(self.device)
+            return alpha
+
+    def calculate_cluster_error(self, ce):
+        if self.regularisation_ratio  > 0:
+            cluster_error = self.cluster_determinator.get_cluster_assignment_prob(self.centroid_to_regularise_to)
+            alpha = self.calculate_cluster_error_alpha(ce, cluster_error)
+            return alpha * cluster_error
+        else:
+            return 0
 
     def training_step(self, batch, batch_idx):
         x, y = batch
-        if self.reference_image is None:
-            self.reference_image = x[0]
         y_hat = self(x)
-        cluster_error = self.get_cluster_assignment_prob()
-        loss = F.cross_entropy(y_hat, y) + self.gamma*cluster_error
+        ce = F.cross_entropy(y_hat, y)
+        cluster_error = self.calculate_cluster_error(ce)
+        loss = ce + cluster_error
         result = pl.TrainResult(loss)
         acc = FM.accuracy(y_hat, y)
         result.log_dict({'train_acc':acc, 'train_loss':loss}, prog_bar=True, logger = False)
         return result
 
     def training_epoch_end(self, outputs):
-        if self.current_epoch == 0:
-            self.logger.experiment.add_graph(self, self.reference_image.unsqueeze(dim = 0))
         accuracy = torch.stack([outputs['train_acc']]).mean()
         loss = torch.stack([outputs['train_loss']]).mean()
-        self.logger.experiment.add_scalar("Loss/Train", loss, self.current_epoch)
-        self.logger.experiment.add_scalar("Accuracy/Train", accuracy, self.current_epoch)
+        self.metric_logger.train_log(loss, accuracy, self.current_epoch)
         tensorboard_logs = {'Loss':loss, 'Accuracy': accuracy}
         epoch_dict = {'loss':loss, 'acc':accuracy}
-        if self.current_epoch % self.hist_epoch_log == 0:
-            self.custom_histogram_adder(None)
         return epoch_dict
 
-    def layer_sparsity(self, params):
-         with torch.no_grad():
-              p = params[torch.abs(params) > 0.00001]
-              number_of_zeros = params.numel() - p.numel()
-              tot = params.numel()
-              sparsity = number_of_zeros / tot
-              return number_of_zeros, tot , sparsity
-
-    def custom_histogram_adder(self, label = None):
-        if label is None:
-            label = self.current_epoch
-        for name, m in self.named_modules():
-            if isinstance(m, LAYERS_PRUNED):
-                params = m.weight
-                b_param = m.bias
-                p =params[torch.abs(params) > 0.00001]
-                self.logger.experiment.add_histogram(str(name) + '_weights', p, label)
-                if b_param is not None:
-                    self.logger.experiment.add_histogram(str(name) + '_bias', b_param, label)
-
-    def print_the_number_of_unique_params(self, count = False):
-        for n, p in self.named_parameters():
-            print(n)
-            if count:
-                print(np.unique(p.data.cpu().detach().numpy(), return_counts = count))
-            else:
-                print(len(np.unique(p.data.cpu().detach().numpy())))
+    def grab_shape(self, n, p):
+        return p.shape
 
 
     def get_layer_shapes(self):
             shapes = []
-            for i, (n, p) in enumerate(self.named_parameters()):
-                    shapes.append(p.data.detach().cpu().numpy().shape)
+            for n, m in self.named_modules():
+             if isinstance(m, LAYERS_FIXED):
+                 for n, p in m.named_parameters():
+                        shapes.append(p.data.detach().cpu().numpy().shape)
             return shapes
 
-    def flatten_the_network(self, tensor=False):
-        if not tensor:
-            weights = []
-            for n, p in self.named_parameters():
-                weights.extend(p.data.detach().flatten().cpu().numpy())
-            return np.array(weights)
-        else:
-            weights = None
-            for n, p in self.named_parameters():
-                if weights is None:
-                    weights = torch.flatten(p)
-                else:
-                    weights = torch.cat([weights,torch.flatten(p)])
-            return weights
+    def flatten_grads(self):
+        return self.flattener.flatten_standard(self.grads)
 
     def flatten_is_fixed(self):
-       return np.concatenate([i.flatten() for i in self.is_fixed])
+        return self.flattener.flatten_standard(self.is_fixed)
 
-    def calculate_distance_from_clusters(self):
-        weights = self.flatten_the_network(True)
-        f = self.flatten_is_fixed()
-        weights = weights[~self.flatten_is_fixed()]
-        distances = None
-        for t in range(self.fixed_center_list.size()[1]):
-            dist = torch.square(weights - self.fixed_center_list[0,t])
-            if distances is None: ## need to tidy this up
-                distances = dist
-            else:
-                try:
-                    distances = torch.stack([distances, dist], dim = 1)
-                except:
-                    dist = dist.unsqueeze(dim = 1)
-                    distances = torch.cat([distances, dist], dim = 1)
-        return distances, weights
+    def register_hooks(self):
+        handles = []
+        hooks = {}
+        for name, layer in self.named_modules():
+                hooks[name] = CaptureOutputs()
+                handles.append(layer.register_forward_hook(hooks[name]))
+        return handles, hooks
 
-    def summarise_clusters_selected(self, centroids, distances):
-        if not self.outer_logger is None:
-           self.outer_logger.experiment.add_scalar("Clusters/max_distance", np.max(distances), self.fixing_iteration)
-           self.outer_logger.experiment.add_scalar("Clusters/median_distance", np.median(distances), self.fixing_iteration)
-           self.outer_logger.experiment.add_scalar("Clusters/std_distance", np.std(distances), self.fixing_iteration)
-           self.outer_logger.experiment.add_scalar("Clusters/mean_distance", np.mean(distances), self.fixing_iteration)
-           self.outer_logger.experiment.add_scalar("Clusters/number_of_clusters", self.clusters , self.fixing_iteration)
+    def pass_through_training_data(self):
+        train_loader = self.train_dataloader()
+        for id, (x, y) in enumerate(train_loader):
+            self(x.to(self.device))
+            return
 
+    def summarise_hooks(self, hooks):
+        for k, v in hooks.items():
+            v.summarise()
 
-    def select_layer_wise(self, distances, distance_allowed, percentage):
-        indices = []
-        count = 0
-        for i, s in enumerate(self.layer_shapes):
-            start = count
-            count += np.prod(s)
-            layer_distances = distances[start:count]
-            possible_choices = (layer_distances - distance_allowed) < 0
-            number_fixed = int(math.ceil(percentage*(count-start)))
-            if number_fixed < (count - start):
-                if np.sum(possible_choices) > number_fixed:
-                    indices.extend(np.random.choice(np.where(possible_choices)[0], size = number_fixed) + start)
-                else:
-                    indices.extend(np.argpartition(layer_distances, number_fixed)[:number_fixed] + start)
-            else:
-                indices.extend(list(range(start, count)))
-        return np.array(indices)
+    def remove_handles(self, hooks):
+        for h in hooks:
+            h.remove()
+
+    def forward_pass_with_hook(self):
+        handles, hooks = self.register_hooks()
+        self.pass_through_training_data()
+        self.summarise_hooks(hooks)
+        self.remove_handles(handles)
+
+    def determine_which_weights_are_newly_fixed(self, idx, flattened_network):
+        currently_fixed_indicies = np.argwhere(flattened_network.cpu())
+        return np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
+
+    def calculate_threshold_value(self, distances_of_newly_fixed):
+        # so I was doing this wrong??? shouldn't it be mean(abs(distances))
+        return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
 
 
+    def calculate_allowable_distance(self):
+        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
+        print('allowable ', a)
+        return a
 
-
-    def push_to_clusters(self, weights, percentage):
-        number_fixed = int(round(len(weights)*percentage, 2))
-        distance_allowed = self.end_distance + (self.iterations - self.fixing_iteration)*self.distance_change
-        print('The distance allowed is ', distance_allowed)
-        centroids = np.expand_dims(self.get_centroids(weights, self.clusters, distance_allowed), axis = 0) # Get the n centroids based the weight distributions
-        if not self.encourage_plus_one_cluster:
-            self.fixed_center_list = torch.Tensor(centroids).to(self.device)
-        print('Centroids optimising for ', self.fixed_center_list[0])
-        distances = np.abs(weights - centroids.transpose()).transpose() # calculate the distance for all weights from these centroids
-        closest_distance = np.min(distances, axis = 1) # what is the distance to the closest centroid for each weight
+    def determine_which_weights_from_layers_should_be_clustered(self, closest_cluster_distances, allowable_distance, percentage):
         if percentage != 1.0:
-            idx = self.select_layer_wise(closest_distance, distance_allowed, percentage)
+            idx = self.cluster_determinator.select_layer_wise(closest_cluster_distances, allowable_distance, percentage)
         else:
-           idx = range(number_fixed)
-        val = np.abs(np.median(closest_distance[idx]))  + np.std(closest_distance[idx])
-        print('Distance value ', val)
-        if val > distance_allowed:
-             self.clusters += 1
-             print('INCREASING CLUSTERS', val, ' ', self.clusters)
-             return self.push_to_clusters(weights, percentage)
-        closest = distances.argmin(axis = 1) # which index is the closest cluster
-        new_distance = np.abs(weights[idx] - centroids[0, closest[idx]]) # what is the distance from my weight to
-        weights = np.zeros_like(weights)
-        clustered = np.zeros_like(weights)
-        weights[idx] = centroids[0, closest[idx]] # set the new weight to be the closest distance centroid (for those selected by the idx partition)
-        clustered[idx] = 1
-        print(len(np.unique(weights[idx])))
-        self.summarise_clusters_selected(centroids, closest_distance[idx])
-        return weights, idx, clustered
+            return range(number_fixed)
 
-    def cluster_prune(self, clusters):
+    def calculate_how_many_to_fix(self, weights, percentage):
+        return int(round(len(weights)*percentage, 2))
+
+    def threshold_breached_handler(self, weights, percentage, quantised_weights):
+         self.number_of_clusters += 1
+         if (self.number_of_clusters == 5 or (self.number_of_clusters % 2 == 0 and self.number_of_clusters >= 8)) and self.cluster_bit_fix == "pow_2_add":
+                 self.converter.increase_pow_2_level()
+                 return self.apply_clustering_to_network()
+         return self.apply_clustering_to_network(quantised_weights)
+
+    def gather_assigned_clusters(self, centroids, idx, closest_cluster_list,  previous_weights):
+        weights = torch.zeros_like(previous_weights).to(self.device)
+        clustered = torch.zeros_like(previous_weights).to(self.device)
+        weights[idx] = centroids[0, closest_cluster_list[idx]].to(self.device) # set the new weight to be the closest distance centroid (for those selected by the idx partition)
+        clustered[idx] = 1
+        return weights, clustered
+
+    def assign_weights_to_clusters(self, clustered_weights, is_clustered_list):
         count = 0
-        weights, idx, clustered = self.push_to_clusters(self.flatten_the_network(), self.percentage_fixed)
         fixed = 0
         for i, s in enumerate(self.layer_shapes):
             start = count
             count += np.prod(s)
-            param_weights = weights[start:count]
-            self.is_fixed[i] = clustered[start:count].reshape(s) > 0
-            self.fixed_weights[i] = torch.Tensor(param_weights.reshape(s))
-            fixed += np.sum(self.is_fixed[i])
-        print('The total fixed = ', fixed)
+            self.is_fixed[i] = is_clustered_list[start:count].reshape(s) > 0
+            self.fixed_weights[i] = clustered_weights[start:count].reshape(s).to(self.device)
+            fixed += torch.sum(self.is_fixed[i])
+        print('The number fixed is ', fixed.cpu().numpy())
 
+
+    def print_unique_params(self):
+        return self.parameter_iterator.iteratate_all_parameters_and_apply(self.metric_logger.print_the_number_of_unique_params)
+
+    def apply_clustering_to_network(self, quantised_weights = None):
+        weights = self.flattener.flatten_network_tensor()
+        percentage = self.percentage_fixed
+        number_fixed = self.calculate_how_many_to_fix(weights, percentage)
+        if quantised_weights is None:
+            quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
+        centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
+        self.centroid_to_regularise_to = centroid_to_regularise_to
+        closest_cluster_distance, closest_cluster_list = self.cluster_determinator.closest_cluster(weights, centroids, self.current_fixing_iteration)
+        self.determine_which_weights_from_layers_should_be_clustered(closest_cluster_distance, percentage, number_fixed)
+        if percentage != 1.0:
+            idx = self.cluster_determinator.select_layer_wise(closest_cluster_distance, self.smallest_distance_allowed, percentage)
+        else:
+           idx = range(number_fixed)
+        newly_fixed = self.determine_which_weights_are_newly_fixed(idx, self.flattener.flatten_standard(self.is_fixed))
+        threshold_val = self.calculate_threshold_value(closest_cluster_distance[newly_fixed])
+        print('current Val ', threshold_val)
+        if threshold_val > self.calculate_allowable_distance() and self.current_fixing_iteration > 1:
+             print('centroids are', centroids)
+             print('number of centroids', self.number_of_clusters)
+             return self.threshold_breached_handler(weights, percentage, quantised_weights)
+        weights, clustered = self.gather_assigned_clusters(centroids, idx, closest_cluster_list, weights)
+        self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration)
+        self.assign_weights_to_clusters(weights, clustered)
+
+    def update_gradient_data_tracker(self, i, grad):
+        if self.tracking_gradients:
+            self.grads[i] = np.abs(grad.data.cpu().detach().numpy())
 
     def on_after_backward(self):
-        for i, (n, v) in enumerate(self.named_parameters()):
-             v.grad.data[np.where(self.is_fixed[i])] = torch.zeros_like(v.grad.data[np.where(self.is_fixed[i])])
+        i = 0
+        for n, pp in self.named_modules():
+          if isinstance(pp, LAYERS_FIXED):
+              for n, v in pp.named_parameters():
+                 v.grad.data[torch.where(self.is_fixed[i])] = torch.zeros_like(v.grad.data[torch.where(self.is_fixed[i])])
+                 if self.current_epoch == self.max_epochs-1:
+                     self.update_gradient_data_tracker(i, v.grad)
+                 i += 1
 
-
-
-    def round_to_precision(self, centroids):
-        if self.cluster_bit_fix == 32:
-           return centroids
-        elif self.cluster_bit_fix == 16:
-           return np.float16(centroids)
-        else:
-           raise ValueError
-
-
-    def move_smallest_to_zero(self, selected): #we move the smallest centroid to zero
-        s_index = np.argmin(np.abs(selected))
-        selected[s_index] = 0
-        return selected
-
-    def get_centroids(self, weights, clusters, distance):
-        bins = [(i*distance) for i in range(int(-np.max(weights)//distance*2),int(np.max(weights)//distance*2))]
-        del bins[bins.index(0)-4: bins.index(0)+5] # we remove the bin options around zero
-        if len(bins) < clusters:
-            bins = clusters
-        e = 1e-10
-        digitized = np.histogram(weights, bins, weights = weights, density=False)[0]
-
-        clusters += 1 # we take an extra cluster centroid but this is just for the loss term
-        if len(bins) > clusters:
-            idx = np.argpartition(np.abs(digitized), -clusters)[-(clusters):]
-        else:
-            idx = range(len(weights))
-
-        digitized = digitized / (np.histogram(weights, bins)[0]+e)
-        selected = self.move_smallest_to_zero(digitized[idx[1:]]) # we take all but the last to be our clusters
-
-        if self.encourage_plus_one_cluster:
-            self.fixed_center_list = torch.Tensor([self.move_smallest_to_zero(digitized[idx])]).to(self.device)
-        print('Centroids selected ', selected)
-        return selected
-
-    def histedges_equalN(self, x, nbin):
-        npt = len(x)
-        return np.interp(np.linspace(0, npt, nbin + 1),
-                     np.arange(npt),
-                     np.sort(x))
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -352,8 +305,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def validation_epoch_end(self, outputs):
         accuracy = torch.stack([outputs['val_acc']]).mean()
         loss = torch.stack([outputs['val_loss']]).mean()
-        self.logger.experiment.add_scalar("Loss/Validation", loss, self.current_epoch)
-        self.logger.experiment.add_scalar("Accuracy/Validation", accuracy, self.current_epoch)
+        self.metric_logger.validation_log(loss, accuracy, self.current_epoch)
         result = pl.EvalResult(checkpoint_on=loss)
         result.log('val_loss', loss, prog_bar=True, on_epoch=True,  logger=True)
         return result
@@ -369,17 +321,10 @@ class Weight_Fix_Base(pl.LightningModule):
         result.log_dict({'test_acc':acc, 'test_loss':loss, 'preds':y_hat, 'actual':y}, prog_bar=True, logger=False)
         return result
 
-
-
     def test_epoch_end(self, outputs):
         accuracy = torch.stack([outputs['test_acc']]).mean()
         loss = torch.stack([outputs['test_loss']]).mean()
-        if not self.outer_logger is None:
-           self.outer_logger.experiment.add_scalar("Loss/Test", loss, self.fixing_iteration)
-           self.outer_logger.experiment.add_scalar("Accuracy/Test", accuracy, self.fixing_iteration)
-           self.outer_logger.experiment.add_scalar("Fixed_Percentage", self.percentage_fixed, self.fixing_iteration)
-
+        self.metric_logger.test_log(loss, accuracy, self.percentage_fixed, self.current_fixing_iteration)
         result = pl.EvalResult()
         result.log_dict({'test_acc':accuracy, 'test_loss':loss}, prog_bar=True, logger=False)
-        self.custom_histogram_adder(None)
         return result

@@ -9,18 +9,12 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 import torchvision.models as models
 from PyTorch_CIFAR10.cifar10_models import *
+from Models.All_Conv_4 import All_Conv_4
+from PyTorch_CIFAR10.cifar10_models.vgg import vgg11_bn
 
-#limits_to_try = [round(x*1e-4, 4) for x in range(18, 34, 2)]
-#change_to_try = [0.0001, 0.00015, 0.00005]
 
-# if you don't get good results - remove 0.995 and 0.9975
-#percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999, 1.0]
-#percentages = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] <- to try
-#first_last_epochs = 20
-#rest_epochs = 5
-
-def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_limit, distance_change, bits,t, gamma,  encourage_plus_one_cluster):
-    experiment_name = f'e={experiment_name}-m={model.name}-d={data.name}-t={t}-g={gamma}-p1c={encourage_plus_one_cluster}-dl={distance_limit}-dc={distance_change}-cb={bits}-e1={first_last_epochs}-fe={rest_epochs}'
+def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, cluster_bit_fix,regularistion_ratio, model_name, non_regd):
+    experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-cb={cluster_bit_fix}-e1={first_last_epochs}-fe={rest_epochs}-nr={non_regd}'
     dr = f'{os.getcwd()}/experiments/{experiment_name}'
     if not os.path.exists(dr):
         os.makedirs(dr)
@@ -30,32 +24,32 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 version = f'joined',
                 name = experiment_name
                 )
-    model.outer_logger = outer_logger
-
-    #model.set_optim(rest_epochs)
     for x in percentages:
         print('percentage of weights ', x)
 
-        logger = TensorBoardLogger(
+        inner_logger = TensorBoardLogger(
                 save_dir = f'{os.getcwd()}/experiments/',
                 version = f'iteration{x}',
                 name = experiment_name
                 )
-        if x == percentages[0]: # or x == (iterations - 1):
+        if x == percentages[0]: # or x == percentages[-1]: # or x == (iterations - 1):
           epochs = first_last_epochs
         else:
           epochs = rest_epochs
-
-        model.set_optim(epochs)
-        trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = logger, num_sanity_val_steps = 0)
-         # not sure if this will work
+        model.set_loggers(inner_logger, outer_logger)
+        model.reset_optim(epochs)
+        trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0)
         trainer.fit(model, data)
+        if x == percentages[0]:
+            orig_acc = trainer.test(model)[0]['test_acc']
+            orig_entropy = model.get_weight_entropy()
+            orig_params = model.get_number_of_u_params()
+
         trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/iteration_{x}_final_model')
-        print(f'iteration{x},{experiment_name}')
         trainer.test(model)
         model.percentage_fixed = x
-        model.cluster_prune(model.clusters)
-        model.fixing_iteration +=1
+        model.apply_clustering_to_network()
+        model.current_fixing_iteration +=1
         model.reset_weights()
 
     logger = TensorBoardLogger(
@@ -63,43 +57,56 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 version = f'final',
                 name = experiment_name
                 )
+    model.set_loggers(logger, outer_logger)
     trainer = pl.Trainer(gpus=1, max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
-    model.set_optim(epochs)
+    model.reset_optim(epochs)
     trainer.fit(model, data)
     trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
-    model.print_the_number_of_unique_params()
-    print('Final test')
-    trainer.test(model, ckpt_path=None)
+    model.print_unique_params()
+    acc = trainer.test(model, ckpt_path=None)[0]['test_acc']
+    model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name)
 
 def get_model(model):
+    use_sched = True
+    if model == 'conv4':
+        model = All_Conv_4()
+        use_sched = False
+        lr = 3e-4
+        model = model.load_from_checkpoint(checkpoint_path="PyTorch_CIFAR10/cifar10_models/state_dicts/all_conv4")
+        return lr, use_sched, model, 'ADAM'
     if model == 'resnet':
-        return resnet18(pretrained = True)
+        lr = 0.00002
+        return lr, use_sched, resnet18(pretrained = True), 'ADAM'
     if model == 'mobilenet':
-        return mobilenet_v2(pretrained = True)
+        lr = 0.00002
+        return lr, use_sched, mobilenet_v2(pretrained = True), 'ADAM'
+    if model == 'vgg':
+        lr = 0.00002
+        return lr, use_sched, vgg11_bn(pretrained = True), 'ADAM'
+
 def main(args):
     cifar = cifar10.CIFAR10DataModule()
     cifar.setup()
-    for c in args.change_to_try:
-        for lim in args.limits_to_try:
-            model = Pretrained_Model_Template(get_model(args.model), args.fixing_epochs + 1, cifar)
-            model.set_up(args.bits, lim, c, len(args.percentages), args.t, args.gamma, args.encourage_plus_one_cluster)
+    for d_a in args.distance_allowed:
+            lr, use_sched, model, opt = get_model(args.model)
+            model = Pretrained_Model_Template(model, args.fixing_epochs + 1, cifar, lr, use_sched, opt)
+            model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd)
             model.flatten_is_fixed()
-            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, lim, c, args.bits, args.t, args.gamma, args.encourage_plus_one_cluster)
+            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--limits_to_try',  nargs='+', type=float, default = [0.00075])
-    parser.add_argument('--change_to_try', nargs='+', type=float, default = [0.0002])
+    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.15]) #0.1, 0.15, 0.2, 0.25, 0.3
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
-    parser.add_argument('--first_epoch', type=int, default = 10)
-    parser.add_argument('--fixing_epochs', type=int, default = 15)
-    parser.add_argument('--bits', type=int, default = 32)
-    parser.add_argument('--name', default = "testing")
-    parser.add_argument('--encourage_plus_one_cluster', default = True, type= bool)
-    parser.add_argument('--gamma', default = 0.7, type=float)
-    parser.add_argument('--t', default = 0.5, type = float)
-    parser.add_argument('--model', default = 'mobilenet')
+    parser.add_argument('--first_epoch', type=int, default = 0)
+    parser.add_argument('--fixing_epochs', type=int, default = 5)
+    parser.add_argument('--cluster_bit_fix', default = 'pow_2_add')
+    parser.add_argument('--name', default = "testing_relative")
+    parser.add_argument('--distance_calculation_type', default = "relative")
+    parser.add_argument('--regularistion_ratio', default = 1, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
+    parser.add_argument('--model', default = 'conv4')
+    parser.add_argument('--non_regd', default = 0, type=float)
     args = parser.parse_args()
     print(args)
     main(args)

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 
 class All_Conv_4(Weight_Fix_Base):
-    def __init__(self, max_epochs):
+    def __init__(self):
         super(All_Conv_4, self).__init__()
         dim_in = [3,32,32]
         self.conv1 = nn.Conv2d(dim_in[0], 64, kernel_size=3, stride = 1)
@@ -29,13 +29,12 @@ class All_Conv_4(Weight_Fix_Base):
         self.pool = nn.MaxPool2d(kernel_size=2)
         self.forward_order = [self.conv1, F.relu, self.conv2, F.relu, self.pool, self.conv3, F.relu, self.conv4 ,F.relu, self.pool]
         self.lr = 3e-4
-        self.max_epochs = max_epochs
 
-    def set_optim(self):
+    def set_optim(self, epochs):
            self.optim = torch.optim.Adam(self.parameters(), lr = self.lr)
-           self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
-                                                                         steps_per_epoch=45000//256,
-                                                                         epochs=self.max_epochs+1)
+#           self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
+#                                                                         steps_per_epoch=45000//256,
+#                                                                         epochs=epochs+1)
 
 
     def forward(self, x):
