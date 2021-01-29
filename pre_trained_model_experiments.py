@@ -10,7 +10,6 @@ import argparse
 import torchvision.models as models
 from PyTorch_CIFAR10.cifar10_models import *
 from Models.All_Conv_4 import All_Conv_4
-from PyTorch_CIFAR10.cifar10_models.vgg import vgg11_bn
 
 
 def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, cluster_bit_fix,regularistion_ratio, model_name, non_regd):
