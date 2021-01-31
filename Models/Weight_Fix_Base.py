@@ -39,7 +39,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def set_loggers(self, inner, outer):
         self.metric_logger.set_loggers(inner, outer)
 
-    def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised):
+    def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance):
         self.parameter_iterator = Parameter_Iterator(self, LAYERS_FIXED)
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
@@ -47,9 +47,9 @@ class Weight_Fix_Base(pl.LightningModule):
         self.calculation_type = distance_calculation_type
         self.distance_calculator = Distance_Calculation(self.calculation_type)
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
-        self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener)
+        self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance)
         self.metric_logger = Metric_Capture(self)
-        self.converter = Converter(cluster_bit_fix, distance_calculation_type)
+        self.converter = Converter(cluster_bit_fix, distance_calculation_type, zero_distance)
         self.smallest_distance_allowed = smallest_distance_allowed
         self.cluster_bit_fix = cluster_bit_fix
         self.number_of_fixing_iterations = number_of_fixing_iterations
@@ -80,11 +80,11 @@ class Weight_Fix_Base(pl.LightningModule):
     def set_layer_shapes(self):
         self.layer_shapes = self.get_layer_shapes()
 
-    def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name):
+    def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name, zd):
         fixed_params = self.get_number_of_u_params()
         fixed_entropy = self.get_weight_entropy()
         self.metric_logger.write_to_results_file(exp_name, self.name, self.regularisation_ratio,
-        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_params, data_name)
+        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_params, data_name, zd)
 
 
     def get_number_of_u_params(self):

@@ -12,8 +12,8 @@ from PyTorch_CIFAR10.cifar10_models import *
 from Models.All_Conv_4 import All_Conv_4
 
 
-def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, cluster_bit_fix,regularistion_ratio, model_name, non_regd):
-    experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-cb={cluster_bit_fix}-e1={first_last_epochs}-fe={rest_epochs}-nr={non_regd}'
+def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, cluster_bit_fix,regularistion_ratio, model_name, non_regd, zd):
+    experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-cb={cluster_bit_fix}-e1={first_last_epochs}-fe={rest_epochs}-nr={non_regd}-zd={zd}'
     dr = f'{os.getcwd()}/experiments/{experiment_name}'
     if not os.path.exists(dr):
         os.makedirs(dr)
@@ -63,7 +63,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
     model.print_unique_params()
     acc = trainer.test(model, ckpt_path=None)[0]['test_acc']
-    model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name)
+    model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd)
 
 def get_model(model):
     use_sched = True
@@ -89,9 +89,9 @@ def main(args):
     for d_a in args.distance_allowed:
             lr, use_sched, model, opt = get_model(args.model)
             model = Pretrained_Model_Template(model, args.fixing_epochs + 1, cifar, lr, use_sched, opt)
-            model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd)
+            model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd, args.zero_distance)
             model.flatten_is_fixed()
-            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd)
+            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd, args.zero_distance)
 
 
 if __name__ == "__main__":
@@ -106,6 +106,7 @@ if __name__ == "__main__":
     parser.add_argument('--regularistion_ratio', default = 1, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
     parser.add_argument('--model', default = 'conv4')
     parser.add_argument('--non_regd', default = 0, type=float)
+    parser.add_argument('--zero_distance', default = 0.0125, type=float)
     args = parser.parse_args()
     print(args)
     main(args)
