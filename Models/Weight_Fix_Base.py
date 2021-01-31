@@ -219,14 +219,14 @@ class Weight_Fix_Base(pl.LightningModule):
         if percentage != 1.0:
             idx = self.cluster_determinator.select_layer_wise(closest_cluster_distances, allowable_distance, percentage)
         else:
-            return range(number_fixed)
+            return range(number_fixed - 1)
 
     def calculate_how_many_to_fix(self, weights, percentage):
         return int(round(len(weights)*percentage, 2))
 
     def threshold_breached_handler(self, weights, percentage, quantised_weights):
          self.number_of_clusters += 1
-         if (self.number_of_clusters == 5 or (self.number_of_clusters % 2 == 0 and self.number_of_clusters >= 8)) and self.cluster_bit_fix == "pow_2_add":
+         if (self.number_of_clusters == 5 or (self.number_of_clusters % 5 == 0 and self.number_of_clusters >= 8)) and self.cluster_bit_fix == "pow_2_add":
                  self.converter.increase_pow_2_level()
                  return self.apply_clustering_to_network()
          return self.apply_clustering_to_network(quantised_weights)
