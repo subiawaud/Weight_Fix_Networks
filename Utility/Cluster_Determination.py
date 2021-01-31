@@ -79,18 +79,18 @@ class Cluster_Determination():
         flatten_is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
         return flattened_model_weights[~flatten_is_fixed]
 
-    def get_cluster_distances(self, weights_to_cluster = None, cluster_centers = None, only_not_fixed = True):
+    def get_cluster_distances(self, weights_to_cluster = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
         if weights_to_cluster is None and only_not_fixed:
             weights_to_cluster = self.grab_only_those_not_fixed()
         elif weights_to_cluster is None:
             weights_to_cluster = self.flattener.flatten_network_tensor()
-        distances = self.distance_calculator.distance_calc(weights_to_cluster, cluster_centers)
+        distances = self.distance_calculator.distance_calc(weights_to_cluster, cluster_centers, requires_grad)
         return distances, weights_to_cluster
 
 
 
-    def get_cluster_assignment_prob(self, cluster_centers):
-        distances, weights_to_cluster = self.get_cluster_distances(cluster_centers = cluster_centers)
+    def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
+        distances, weights_to_cluster = self.get_cluster_distances(cluster_centers = cluster_centers,rquires_grad =  requires_grad)
         e = 1e-12
         cluster_weight_assignment = F.softmin(distances + e)
         weighted = self.weighting_function(cluster_weight_assignment, distances, weights_to_cluster)
