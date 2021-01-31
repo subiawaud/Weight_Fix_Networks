@@ -15,7 +15,7 @@ class Metric_Capture():
     def get_results_columns(self):
         return np.array(['data_name', 'experiment_name', 'model_name', 'regularisation_ratio',
          'distance_allowed',  'fixing_epochs',  'orig_acc', 'orig_entropy', 'orig_params',
-                'compressed_acc', 'compressed_entropy', 'unique_params'])
+                'compressed_acc', 'compressed_entropy', 'unique_params', 'zero_distance'])
 
     def check_results_file_exists(self):
         if not os.path.isfile(self.results_file):
@@ -27,13 +27,12 @@ class Metric_Capture():
         self.outer_logger = outer
 
     def write_to_results_file(self, exp_name, model_name, regularistion_ratio,
-    distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, compressed_acc, compressed_entropy, unique_params, data_name):
+    distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, compressed_acc, compressed_entropy, unique_params, data_name, zero_distance):
         d ={'data_name': data_name, 'experiment_name' : exp_name, 'model_name' : model_name, 'regularistion_ratio' : regularistion_ratio,
         'distance_allowed' : distance_allowed,  'fixing_epochs' : fixing_epochs,'orig_acc' : orig_acc, 'orig_entropy': orig_entropy, 'orig_params' :orig_params,
          'compressed_acc' : compressed_acc,  'compressed_entropy' : compressed_entropy,
-        'unique_params' : unique_params}
+        'unique_params' : unique_params, 'zero_distance' : zero_distance}
         new = pd.DataFrame.from_records([d])
-        print(new, ' HEREEEE')
         new.to_csv(self.results_file, mode='a', header=False, index=False)
 
 
