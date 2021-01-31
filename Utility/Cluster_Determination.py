@@ -34,7 +34,10 @@ class Cluster_Determination():
         val, count = np.unique(values.cpu(), return_counts = True)
         print(val, count)
         number_of_clusters+= 1
-        idx = np.argpartition(count, -number_of_clusters)[-number_of_clusters:]
+        if number_of_clusters > len(count):
+             idx = np.argpartition(count, -len(count))[-len(count):]
+        else: 
+             idx = np.argpartition(count, -number_of_clusters)[-number_of_clusters:]
         selected = val[idx]
         print('selected', selected)
         clusters = torch.Tensor([selected]).to(self.model.device)

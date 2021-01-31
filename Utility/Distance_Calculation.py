@@ -16,7 +16,7 @@ class Distance_Calculation():
         for i in range(centers.size()[1]):
             distance = torch.abs(weights - centers[0, i])
             if not requires_grad:
-                distance = distance.detach()
+                distance = distance.detach().cpu()
             if distances is None:
                 distances = distance.unsqueeze(dim = 1)
             else:
@@ -25,4 +25,6 @@ class Distance_Calculation():
                 except:
                     distance = distance.unsqueeze(dim = 1)
                     distances = torch.cat([distances, distance], dim = 1)
+        if not requires_grad:
+            return distances.to('cuda')
         return distances

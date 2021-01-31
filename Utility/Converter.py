@@ -6,15 +6,13 @@ class Converter():
     def __init__(self, cluster_bit_fix, distance_type, zero_distance):
         self.pow_2_level = 0
         self.cluster_bit_fix = cluster_bit_fix
-        self.maximum_pow_2_level = 8
         self.distance_type = distance_type
         self.zero_distance = zero_distance
 
 
     def increase_pow_2_level(self):
         print('INCREASING POW LEVEL')
-        if self.pow_2_level < self.maximum_pow_2_level:
-            self.pow_2_level += 1
+        self.pow_2_level += 1
 
     def convert_to_pows_of_2(self, weights, first = False):
          import math
