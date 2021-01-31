@@ -15,8 +15,8 @@ class Distance_Calculation():
         distances = None
         for i in range(centers.size()[1]):
             distance = torch.abs(weights - centers[0, i])
-	    if not requires_grad:
-		distance = distance.detach()
+            if not requires_grad:
+                distance = distance.detach()
             if distances is None:
                 distances = distance.unsqueeze(dim = 1)
             else:
