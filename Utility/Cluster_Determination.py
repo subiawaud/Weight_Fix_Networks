@@ -5,11 +5,12 @@ import numpy as np
 import torch
 
 class Cluster_Determination():
-    def __init__(self, distance_calculator, model, is_fixed, distance_type, layer_shapes, flattener):
+    def __init__(self, distance_calculator, model, is_fixed, distance_type, layer_shapes, flattener, zero_distance):
         self.distance_calculator = distance_calculator
         self.model = model
         self.flattener = flattener
         self.is_fixed = is_fixed
+        self.zero_distance = zero_distance
         self.weighting_function = self.determine_weighting(distance_type)
         self.distance_type = distance_type
         self.layer_shapes = layer_shapes
@@ -25,7 +26,7 @@ class Cluster_Determination():
         distances, _ = self.get_cluster_distances(cluster_centers = clusters, only_not_fixed = False)
         closest_cluster, closest_cluster_index =  torch.min(distances, dim=1)
         if self.distance_type == 'relative':
-            large = torch.abs(closest_cluster) > 0.0125
+            large = torch.abs(closest_cluster) > self.zero_distance
             closest_cluster[large] = torch.abs(closest_cluster[large] / (weights[large] + 1e-10))
         return closest_cluster, closest_cluster_index
 
@@ -69,7 +70,7 @@ class Cluster_Determination():
 
     def relative_weighting(self, weighting, distance, weights):
         weighted = self.standard_weighting(weighting, distance)
-        larger = torch.abs(weighted) > 0.0125
+        larger = torch.abs(weighted) > self.zero_distance
         weighted[larger] = torch.div(weighted[larger], torch.abs(weights[larger]))
         return weighted
 
