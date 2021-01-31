@@ -6,7 +6,7 @@ class Converter():
     def __init__(self, cluster_bit_fix, distance_type):
         self.pow_2_level = 0
         self.cluster_bit_fix = cluster_bit_fix
-        self.maximum_pow_2_level = 4
+        self.maximum_pow_2_level = 8
         self.distance_type = distance_type
 
 
