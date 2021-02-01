@@ -212,7 +212,9 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def calculate_allowable_distance(self):
         a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
-        print('allowable ', a)
+        if self.number_of_clusters >= 35: # to stop out of memory issues
+            print('ABORT')
+            a *= 2
         return a
 
     def determine_which_weights_from_layers_should_be_clustered(self, closest_cluster_distances, allowable_distance, percentage):
