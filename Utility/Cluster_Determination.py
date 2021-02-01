@@ -22,8 +22,22 @@ class Cluster_Determination():
           'relative' : self.relative_weighting
         }[distance_type]
 
+    def set_the_distances_of_already_fixed(self, flattened_weights, flatten_is_fixed, clusters, distances):
+        if torch.sum(flatten_is_fixed) <= 1:
+            return distances
+        for c in range(clusters.size()[1]):
+            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], 0.0, 1.0)
+            distances[flatten_is_fixed, c] = new_vals
+        return distances
+
     def closest_cluster(self,weights,  clusters, iteration):
-        distances, _ = self.get_cluster_distances(cluster_centers = clusters, only_not_fixed = False)
+        flattened_weights = self.flattener.flatten_network_tensor()
+        flatten_is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
+        distances = torch.ones(flattened_weights.size()[0], clusters.size()[1]).to('cuda') # create a zero matrix for each of the distances to clusters
+        distances = self.set_the_distances_of_already_fixed(flattened_weights, flatten_is_fixed, clusters, distances)
+        newly_fixed_distances = self.distance_calculator.distance_calc(flattened_weights[~flatten_is_fixed], clusters, distances[~flatten_is_fixed], requires_grad = False)
+        distances[~flatten_is_fixed] = newly_fixed_distances
+
         closest_cluster, closest_cluster_index =  torch.min(distances, dim=1)
         if self.distance_type == 'relative':
             large = torch.abs(closest_cluster) > self.zero_distance
@@ -36,7 +50,7 @@ class Cluster_Determination():
         number_of_clusters+= 1
         if number_of_clusters > len(count):
              idx = np.argpartition(count, -len(count))[-len(count):]
-        else: 
+        else:
              idx = np.argpartition(count, -number_of_clusters)[-number_of_clusters:]
         selected = val[idx]
         print('selected', selected)
@@ -87,9 +101,9 @@ class Cluster_Determination():
             weights_to_cluster = self.grab_only_those_not_fixed()
         elif weights_to_cluster is None:
             weights_to_cluster = self.flattener.flatten_network_tensor()
-        distances = self.distance_calculator.distance_calc(weights_to_cluster, cluster_centers, requires_grad)
+        distances = torch.zeros(weights_to_cluster.size()[0], cluster_centers.size()[1]).to('cuda')
+        distances = self.distance_calculator.distance_calc(weights_to_cluster, cluster_centers, distances, requires_grad)
         return distances, weights_to_cluster
-
 
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):

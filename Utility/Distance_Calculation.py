@@ -11,20 +11,22 @@ class Distance_Calculation():
         }[distance_type]
 
 
-    def manhatten_distance(self, weights, centers, requires_grad = False):
-        distances = None
+    def manhatten_distance(self, weights, centers, distance_matrix, requires_grad = False):
         for i in range(centers.size()[1]):
-            distance = torch.abs(weights - centers[0, i])
             if not requires_grad:
-                distance = distance.detach().cpu()
-            if distances is None:
-                distances = distance.unsqueeze(dim = 1)
+                distance_matrix[:, i] = torch.abs(weights - centers[0, i]).detach()
             else:
-                try:
-                    distances = torch.stack([distances, distance], dim = 1)
-                except:
-                    distance = distance.unsqueeze(dim = 1)
-                    distances = torch.cat([distances, distance], dim = 1)
-        if not requires_grad:
-            return distances.to('cuda')
-        return distances
+                distance_matrix[:, i] = torch.abs(weights - centers[0, i])
+
+#            distance = torch.abs(weights - centers[0, i])
+#            if not requires_grad:
+#                distance = distance.detach().cpu()
+#            if distances is None:
+#                distances = distance.unsqueeze(dim = 1)
+#            else:
+#                try:
+#                    distances = torch.stack([distances, distance], dim = 1)
+#                except:
+#                    distance = distance.unsqueeze(dim = 1)
+#                    distances = torch.cat([distances, distance], dim = 1)
+        return distance_matrix

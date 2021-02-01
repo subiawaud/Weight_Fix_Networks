@@ -16,4 +16,4 @@ params = list(itertools.product(*[percentages, distances_allowed, first_epochs, 
 for param_set in params:
          percentage, da, f_e, r_e, b, gamma,z = param_set
          script_test =f'--distance_allowed {da} --regularistion_ratio {gamma} --percentages {percentage} --first_epoch {f_e} --fixing_epochs {r_e} --cluster_bit_fix {b} --name "exp_1" --model {model} --zero_distance {z}'
-         os.system('sbatch -A ecsstaff script.sh '+ script_test)
+         os.system('python pre_trained_model_experiment.py'+ script_test)
