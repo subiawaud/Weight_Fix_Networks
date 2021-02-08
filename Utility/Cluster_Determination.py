@@ -26,7 +26,7 @@ class Cluster_Determination():
         if torch.sum(flatten_is_fixed) <= 1:
             return distances
         for c in range(clusters.size()[1]):
-            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], 0.0, 1.0)
+            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], torch.tensor(0.0).to('cuda'), torch.tensor(1.0).to('cuda'))
             distances[flatten_is_fixed, c] = new_vals
         return distances
 

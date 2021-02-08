@@ -20,7 +20,7 @@ from Utility.Metric_Capture import Metric_Capture
 from Utility.Parameter_Iterator import *
 from scipy.stats import entropy
 
-LAYERS_FIXED = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
+LAYERS_FIXED = [nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d] #, nn.BatchNorm2d, nn.BatchNorm1d]
 
 
 class Weight_Fix_Base(pl.LightningModule):
@@ -39,7 +39,10 @@ class Weight_Fix_Base(pl.LightningModule):
     def set_loggers(self, inner, outer):
         self.metric_logger.set_loggers(inner, outer)
 
-    def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance):
+    def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance, bn_inc):
+        if bn_inc:
+            global LAYERS_FIXED
+            LAYERS_FIXED = LAYERS_FIXED.extend([nn.BatchNorm2d, nn.BatchNorm1d])
         self.parameter_iterator = Parameter_Iterator(self, LAYERS_FIXED)
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
@@ -82,9 +85,9 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name, zd):
         fixed_params = self.get_number_of_u_params()
-        fixed_entropy = self.get_weight_entropy()
+        fixed_entropy, fixed_entropy_non_zero = self.get_weight_entropy()
         self.metric_logger.write_to_results_file(exp_name, self.name, self.regularisation_ratio,
-        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_params, data_name, zd)
+        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_entropy_non_zero, fixed_params, data_name, zd)
 
 
     def get_number_of_u_params(self):
@@ -92,8 +95,14 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def get_weight_entropy(self):
         v, c = np.unique(self.flattener.flatten_network_numpy(), return_counts = True)
+        try:
+                c_z = np.delete(c, v.index(0.))
+        except:
+	        c_z = c
+	        print('no zero entry')
         c = np.array(c) / np.sum(c)
-        return entropy(c, base=2)
+        c_z = np.array(c_z) / np.sum(c_z)
+        return entropy(c, base=2), entropy(c_z, base=2)
 
     def on_epoch_start(self):
         if self.current_epoch == 0:
@@ -212,7 +221,7 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def calculate_allowable_distance(self):
         a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
-        if self.number_of_clusters >= 35: # to stop out of memory issues
+        if self.number_of_clusters >= 100: # to stop out of memory issues
             print('ABORT')
             a *= 2
         return a
