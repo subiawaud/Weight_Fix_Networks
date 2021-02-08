@@ -43,6 +43,7 @@ class Weight_Fix_Base(pl.LightningModule):
         if bn_inc:
             global LAYERS_FIXED
             LAYERS_FIXED = LAYERS_FIXED.extend([nn.BatchNorm2d, nn.BatchNorm1d])
+        LAYERS_FIXED = tuple(LAYERS_FIXED)
         self.parameter_iterator = Parameter_Iterator(self, LAYERS_FIXED)
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
