@@ -30,7 +30,7 @@ class Weight_Fix_Base(pl.LightningModule):
         self.name = 'Base'  # object name
         self.tracking_gradients = False
         self.percentage_fixed = 0
-		self.layers_fixed = None
+        self.layers_fixed = None
 
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs

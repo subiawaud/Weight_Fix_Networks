@@ -1,7 +1,7 @@
 import torch
 import pytorch_lightning as pl
 import torchvision.transforms as transforms
-from torchvision.datasets import ImageNet
+from torchvision.datasets import ImageNet, ImageFolder
 from torch.utils.data import DataLoader
 import torchvision.models as models
 
@@ -9,7 +9,7 @@ import torchvision.models as models
 class ImageNet_Module(pl.LightningDataModule):
         def __init__(self, data_dir: str = 'Datasets/', shuffle_pixels=False, shuffle_labels=False, random_pixels=False):
                 super().__init__()
-                self.data_dir = '/ssdfs/datasets/imagenet_2012/' 
+                self.data_dir = 'ssd/datasets/imagenet_2012/' 
                 self.mean = [0.485, 0.456, 0.406]
                 self.std = [0.229, 0.224, 0.225]
                 self.normalise = transforms.Normalize(mean=self.mean, std=self.std)
@@ -32,7 +32,7 @@ class ImageNet_Module(pl.LightningDataModule):
                 permute_pixels_transform = lambda x: self.permute_pixels(x)
                 return transforms.Compose([
                         transforms.Resize((256, 256)),
-                        transforms.Center(224),
+                        transforms.CenterCrop(224),
                         transforms.ToTensor(),
                         self.normalise,
                         permute_pixels_transform])
@@ -41,7 +41,7 @@ class ImageNet_Module(pl.LightningDataModule):
                 random_pixel_transform = lambda x: torch.rand(x.size())
                 return transforms.Compose([
                         transforms.Resize((256, 256)),
-                        transforms.Center(224),
+                        transforms.CenterCrop(224),
                         transforms.ToTensor(),
                         self.normalise,
                         random_pixel_transform])
@@ -49,7 +49,7 @@ class ImageNet_Module(pl.LightningDataModule):
              else:
                 return transforms.Compose([
                         transforms.Resize((256, 256)),
-                        transforms.Center(224),
+                        transforms.CenterCrop(224),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         self.normalise])
@@ -60,17 +60,13 @@ class ImageNet_Module(pl.LightningDataModule):
              x = x.view(-1)[idx].view(x.size())
              return x
 
-        def prepare_data(self):
-                ImageNet(self.data_dir, train = True, download = True)
-                ImageNet(self.data_dir, train = False, download = True)
-
         def setup(self, stage=None):
                 if stage == 'fit' or stage is None:
-                        im_full = ImageFolder(self.data_dir + 'train', train = True, transform=self.transform, target_transform=self.target_transform)
+                        im_full = ImageFolder(self.data_dir + 'train',  transform=self.transform, target_transform=self.target_transform)
                         self.train, self.val = random_split(im_full, [45000, 5000])
 
                 if stage == 'test' or stage is None:
-                        self.test = ImageNet(self.data_dir + 'val', train = False, transform=self.transform, target_transform=self.target_transform)
+                        self.test = ImageNet(self.data_dir + 'val', transform=self.transform, target_transform=self.target_transform)
 
         def train_dataloader(self):
                 return DataLoader(self.train, batch_size=self.bs, num_workers = 6)
