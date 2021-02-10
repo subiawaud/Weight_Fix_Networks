@@ -20,7 +20,7 @@ from Utility.Metric_Capture import Metric_Capture
 from Utility.Parameter_Iterator import *
 from scipy.stats import entropy
 
-LAYERS_FIXED = [nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d] #, nn.BatchNorm2d, nn.BatchNorm1d]
+LAYERS_FIXED = None
 
 
 class Weight_Fix_Base(pl.LightningModule):
@@ -40,10 +40,12 @@ class Weight_Fix_Base(pl.LightningModule):
         self.metric_logger.set_loggers(inner, outer)
 
     def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance, bn_inc):
+        global LAYERS_FIXED
         if bn_inc:
-            global LAYERS_FIXED
-            LAYERS_FIXED = LAYERS_FIXED.extend([nn.BatchNorm2d, nn.BatchNorm1d])
-        LAYERS_FIXED = tuple(LAYERS_FIXED)
+	    LAYERS_FIXED = [nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d]
+        else:
+	    LAYERS_FIXED = [nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d]
+	LAYERS_FIXED = tuple(LAYERS_FIXED)
         self.parameter_iterator = Parameter_Iterator(self, LAYERS_FIXED)
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
