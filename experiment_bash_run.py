@@ -6,12 +6,12 @@ distances_allowed = ["0.005 0.0075 0.0025"]
 first_epochs = [0]
 rest_epochs = [30]
 bits = ['pow_2_add']
-gammas = [0.05, 0.025, 0.075]
+gammas = [0.05]
 #gammas = [0]
 #model = 'allconv'
 zeros = [2**-7] # [2**-x for x in range(6, 9)]
 model = 'resnet'
-dataset = 'cifar10'
+dataset = 'imnet'
 bn = False
 
 

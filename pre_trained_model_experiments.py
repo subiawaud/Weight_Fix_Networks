@@ -1,6 +1,6 @@
 import torch
 from Models.Pretrained_Model_Template import Pretrained_Model_Template
-from Datasets import cifar10, mnist
+from Datasets import cifar10, mnist, imagenet
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 import os
@@ -86,7 +86,7 @@ def determine_dataset(data_arg):
     if data_arg == 'cifar10':
         return cifar10.CIFAR10DataModule()
     elif data_arg == 'imnet':
-        return imagenet_module.ImageNet_Module()
+        return imagenet.ImageNet_Module()
 
 def main(args):
     data = determine_dataset(args.dataset)
