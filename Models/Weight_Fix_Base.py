@@ -20,7 +20,6 @@ from Utility.Metric_Capture import Metric_Capture
 from Utility.Parameter_Iterator import *
 from scipy.stats import entropy
 
-LAYERS_FIXED = None
 
 
 class Weight_Fix_Base(pl.LightningModule):
@@ -31,6 +30,7 @@ class Weight_Fix_Base(pl.LightningModule):
         self.name = 'Base'  # object name
         self.tracking_gradients = False
         self.percentage_fixed = 0
+		self.layers_fixed = None
 
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs
@@ -40,13 +40,11 @@ class Weight_Fix_Base(pl.LightningModule):
         self.metric_logger.set_loggers(inner, outer)
 
     def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance, bn_inc):
-        global LAYERS_FIXED
         if bn_inc:
-	    LAYERS_FIXED = [nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d]
+                self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d)
         else:
-	    LAYERS_FIXED = [nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d]
-	LAYERS_FIXED = tuple(LAYERS_FIXED)
-        self.parameter_iterator = Parameter_Iterator(self, LAYERS_FIXED)
+                self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
+        self.parameter_iterator = Parameter_Iterator(self, self.layers_fixed)
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
         self.set_inital_weights()
@@ -75,7 +73,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def reset_weights(self):
         i = 0
         for n, m in self.named_modules():
-         if isinstance(m, LAYERS_FIXED):
+         if isinstance(m, self.layers_fixed):
              for n, p in m.named_parameters():
                 new_param = self.fixed_weights[i][torch.where(self.is_fixed[i])]# [self.is_fixed[i]]
                 p.data[torch.where(self.is_fixed[i])] = new_param # torch.Tensor(new_param).to(self.device)#.flatten()
@@ -174,7 +172,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def get_layer_shapes(self):
             shapes = []
             for n, m in self.named_modules():
-             if isinstance(m, LAYERS_FIXED):
+             if isinstance(m, self.layers_fixed):
                  for n, p in m.named_parameters():
                         shapes.append(p.data.detach().cpu().numpy().shape)
             return shapes
@@ -299,7 +297,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def on_after_backward(self):
         i = 0
         for n, pp in self.named_modules():
-          if isinstance(pp, LAYERS_FIXED):
+          if isinstance(pp, self.layers_fixed):
               for n, v in pp.named_parameters():
                  v.grad.data[torch.where(self.is_fixed[i])] = torch.zeros_like(v.grad.data[torch.where(self.is_fixed[i])])
                  if self.current_epoch == self.max_epochs-1:

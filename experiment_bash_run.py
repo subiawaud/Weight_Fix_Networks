@@ -11,11 +11,12 @@ gammas = [0.05, 0.025, 0.075]
 #model = 'allconv'
 zeros = [2**-7] # [2**-x for x in range(6, 9)]
 model = 'resnet'
+dataset = 'cifar10'
 bn = False
 
 
 params = list(itertools.product(*[percentages, distances_allowed, first_epochs, rest_epochs, bits, gammas, zeros]))
 for param_set in params:
          percentage, da, f_e, r_e, b, gamma,z = param_set
-         script_test =f'--distance_allowed {da} --regularistion_ratio {gamma} --percentages {percentage} --first_epoch {f_e} --fixing_epochs {r_e} --cluster_bit_fix {b} --name "exp_1" --model {model} --zero_distance {z} --bn_inc {bn}'
+         script_test =f'--distance_allowed {da} --regularistion_ratio {gamma} --percentages {percentage} --first_epoch {f_e} --fixing_epochs {r_e} --cluster_bit_fix {b} --name "exp_1" --model {model} --zero_distance {z} --bn_inc {bn} --data {dataset}'
          os.system('sbatch script.sh '+ script_test)

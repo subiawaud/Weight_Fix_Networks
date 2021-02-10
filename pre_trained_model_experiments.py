@@ -85,25 +85,18 @@ def get_model(model):
 def determine_dataset(data_arg):
     if data_arg == 'cifar10':
         return cifar10.CIFAR10DataModule()
-    elif data_arg == 'imnet'
+    elif data_arg == 'imnet':
         return imagenet_module.ImageNet_Module()
 
 def main(args):
-    data = determine_dataset(args.data)
+    data = determine_dataset(args.dataset)
     data.setup()
     for d_a in args.distance_allowed:
             lr, use_sched, model, opt = get_model(args.model)
-<<<<<<< HEAD
             model = Pretrained_Model_Template(model, args.fixing_epochs + 1, data, lr, use_sched, opt)
-            model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd, args.zero_distance)
-            model.flatten_is_fixed()
-            run_experiment('set_1', model, data,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd, args.zero_distance)
-=======
-            model = Pretrained_Model_Template(model, args.fixing_epochs + 1, cifar, lr, use_sched, opt)
             model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd, args.zero_distance, args.bn_inc)
             model.flatten_is_fixed()
-            run_experiment('set_1', model, cifar,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd, args.zero_distance, arg.bn_inc)
->>>>>>> 4941fcafc2636f703acc403e3bee5e6f0411b47d
+            run_experiment('set_1', model, data,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd, args.zero_distance, args.bn_inc)
 
 
 if __name__ == "__main__":
@@ -115,7 +108,7 @@ if __name__ == "__main__":
     parser.add_argument('--cluster_bit_fix', default = 'pow_2_add')
     parser.add_argument('--name', default = "testing_relative")
     parser.add_argument('--distance_calculation_type', default = "relative")
-    parser.add_argument('--regularistion_ratio', default = 1000, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
+    parser.add_argument('--regularistion_ratio', default = 0.05, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
     parser.add_argument('--model', default = 'resnet')
     parser.add_argument('--non_regd', default = 0, type=float)
     parser.add_argument('--dataset', default = 'cifar10')
