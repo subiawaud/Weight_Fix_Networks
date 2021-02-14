@@ -57,7 +57,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
 
         def setup(self, stage=None):
                 if stage == 'fit' or stage is None:
-                        cifar_full = CIFAR10(self.data_dir, train = True, transform=self.transform, target_transform=self.target_transform)
+                        cifar_full = CIFAR10(self.data_dir, train = True, transform=self.transform, target_transform=self.target_transform, download=True)
                         self.train, self.val = random_split(cifar_full, [45000, 5000])
 
                 if stage == 'test' or stage is None:
