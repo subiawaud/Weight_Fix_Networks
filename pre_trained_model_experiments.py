@@ -64,7 +64,8 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     acc = trainer.test(model, ckpt_path=None)[0]['test_acc']
     model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd)
 
-def get_model(model):
+def get_model(model, data):
+    print(model, data)
     use_sched = True
     if model == 'conv4':
         model = All_Conv_4()
@@ -72,15 +73,15 @@ def get_model(model):
         lr = 3e-4
         model = model.load_from_checkpoint(checkpoint_path="PyTorch_CIFAR10/cifar10_models/state_dicts/all_conv4")
         return lr, use_sched, model, 'ADAM'
-    if model == 'resnet':
+    if model == 'resnet' and data == 'cifar10':
         lr = 0.00002
         return lr, use_sched, resnet18(pretrained = True), 'ADAM'
+    if model == 'resnet' and data == 'imnet':
+        lr = 0.00002
+        return lr, use_sched, models.resnet18(pretrained = True), 'ADAM'
     if model == 'mobilenet':
         lr = 0.00002
         return lr, use_sched, mobilenet_v2(pretrained = True), 'ADAM'
-    if model == 'vgg':
-        lr = 0.00002
-        return lr, use_sched, vgg11_bn(pretrained = True), 'ADAM'
 
 def determine_dataset(data_arg):
     if data_arg == 'cifar10':
@@ -92,7 +93,7 @@ def main(args):
     data = determine_dataset(args.dataset)
     data.setup()
     for d_a in args.distance_allowed:
-            lr, use_sched, model, opt = get_model(args.model)
+            lr, use_sched, model, opt = get_model(args.model, args.dataset)
             model = Pretrained_Model_Template(model, args.fixing_epochs + 1, data, lr, use_sched, opt)
             model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd, args.zero_distance, args.bn_inc)
             model.flatten_is_fixed()
@@ -103,17 +104,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.05]) #0.1, 0.15, 0.2, 0.25, 0.3
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
-    parser.add_argument('--first_epoch', type=int, default = 0)
-    parser.add_argument('--fixing_epochs', type=int, default = 2)
+    parser.add_argument('--first_epoch', type=int, default =5)
+    parser.add_argument('--fixing_epochs', type=int, default = 5)
     parser.add_argument('--cluster_bit_fix', default = 'pow_2_add')
     parser.add_argument('--name', default = "testing_relative")
     parser.add_argument('--distance_calculation_type', default = "relative")
     parser.add_argument('--regularistion_ratio', default = 0.05, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
     parser.add_argument('--model', default = 'resnet')
     parser.add_argument('--non_regd', default = 0, type=float)
-    parser.add_argument('--dataset', default = 'cifar10')
+    parser.add_argument('--dataset', default = 'imnet')
     parser.add_argument('--zero_distance', default = 2**-6, type=float)
-    parser.add_argument('--bn_inc', default=True, type=bool)
+    parser.add_argument('--bn_inc', type=bool)
     args = parser.parse_args()
     print(args)
     main(args)
