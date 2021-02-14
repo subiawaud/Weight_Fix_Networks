@@ -97,7 +97,7 @@ def main(args):
             model = Pretrained_Model_Template(model, args.fixing_epochs + 1, data, lr, use_sched, opt)
             model.set_up(args.distance_calculation_type, args.cluster_bit_fix, d_a, len(args.percentages), args.regularistion_ratio, args.non_regd, args.zero_distance, args.bn_inc)
             model.flatten_is_fixed()
-            run_experiment('set_1', model, data,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd, args.zero_distance, args.bn_inc)
+            run_experiment('set_1', model, data,args.first_epoch, args.fixing_epochs, args.percentages, d_a, args.cluster_bit_fix, args.regularistion_ratio, args.model, args.non_regd, args.zero_distance, args.bn_inc > 0.1)
 
 
 if __name__ == "__main__":
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     parser.add_argument('--non_regd', default = 0, type=float)
     parser.add_argument('--dataset', default = 'imnet')
     parser.add_argument('--zero_distance', default = 2**-6, type=float)
-    parser.add_argument('--bn_inc', type=bool)
+    parser.add_argument('--bn_inc', type=float)
     args = parser.parse_args()
-    print(args)
+    print('This is the args ', args)
     main(args)

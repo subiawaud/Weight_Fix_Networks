@@ -41,6 +41,7 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance, bn_inc):
         if bn_inc:
+                print('BATCH NORM included')
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d)
         else:
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
