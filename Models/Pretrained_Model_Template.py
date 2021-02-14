@@ -21,11 +21,13 @@ class Pretrained_Model_Template(Weight_Fix_Base):
         self.lr = lr
         self.weight_decay = 1e-4
         self.batch_size = data_module.bs
+        self.batch_size = 256
         self.train_size = len(data_module.train_dataloader().dataset)
         self.use_sched = use_sched
         self.opt = opt
 
     def set_optim(self, max_epochs):
+           print('in here ', self.train_size)
            if self.opt == 'ADAM':
                self.optim = torch.optim.Adam(self.parameters(), lr = self.lr)
            elif self.opt == 'SGD':
