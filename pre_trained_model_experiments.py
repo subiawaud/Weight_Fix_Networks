@@ -36,7 +36,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
           epochs = rest_epochs
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
-        trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        trainer = pl.Trainer(gpus=-1, precision=16, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
         trainer.fit(model, data)
         if x == percentages[0]:
             orig_acc = trainer.test(model)[0]['test_acc']
@@ -56,7 +56,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 name = experiment_name
                 )
     model.set_loggers(logger, outer_logger)
-    trainer = pl.Trainer(gpus=1, max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
+    trainer = pl.Trainer(gpus=-1, accelerator='ddp', precision=16, max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
     model.reset_optim(epochs)
     trainer.fit(model, data)
     trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
@@ -78,7 +78,10 @@ def get_model(model, data):
         return lr, use_sched, resnet18(pretrained = True), 'ADAM'
     if model == 'resnet' and data == 'imnet':
         lr = 0.00002
-        return lr, use_sched, models.resnet18(pretrained = True), 'ADAM'
+        model = models.resnet18(pretrained=False)
+        model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
+        model.name = 'resnet18'
+        return lr, use_sched, model, 'ADAM'
     if model == 'mobilenet':
         lr = 0.00002
         return lr, use_sched, mobilenet_v2(pretrained = True), 'ADAM'

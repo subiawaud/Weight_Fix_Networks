@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 class Cluster_Determination():
-    def __init__(self, distance_calculator, model, is_fixed, distance_type, layer_shapes, flattener, zero_distance):
+    def __init__(self, distance_calculator, model, is_fixed, distance_type, layer_shapes, flattener, zero_distance, device):
         self.distance_calculator = distance_calculator
         self.model = model
         self.flattener = flattener
@@ -14,6 +14,7 @@ class Cluster_Determination():
         self.weighting_function = self.determine_weighting(distance_type)
         self.distance_type = distance_type
         self.layer_shapes = layer_shapes
+        self.device = device
 
 
     def determine_weighting(self, distance_type):
@@ -26,7 +27,7 @@ class Cluster_Determination():
         if torch.sum(flatten_is_fixed) <= 1:
             return distances
         for c in range(clusters.size()[1]):
-            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], torch.tensor(0.0).to('cuda'), torch.tensor(1.0).to('cuda'))
+            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], torch.tensor(0.0).to(self.device), torch.tensor(1.0).to(self.device))
             distances[flatten_is_fixed, c] = new_vals
         return distances
 

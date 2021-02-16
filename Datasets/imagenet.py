@@ -7,63 +7,15 @@ import torchvision.models as models
 import io
 import os
 import pickle
-import h5py
 from PIL import Image
 from torchvision.datasets import VisionDataset
 
-
-class ImageNetHDF5(VisionDataset):
-    def __init__(self, root, cache_size=500, transform=None):
-        super(ImageNetHDF5, self).__init__(root, transform=transform, target_transform=None)
-
-        #self.dest = pickle.load(open(os.path.join(root, 'dest.p'), 'rb'))
-        self.cache = {}
-        self.cache_size = cache_size
-
-        targets = sorted(list(filter(lambda f: '.hdf5' in f, os.listdir(root))))
-        print(targets)
-        self.targets = {f[:-5]: i for i, f in enumerate(targets)}
-        self.fill_cache()
-        self.dest = self.cache.keys()
-
-    def load(self, file, i):
-        with h5py.File(os.path.join(self.root, file + '.hdf5'), 'r') as f:
-            return f['data'][i]
-
-    def fill_cache(self):
-        print('Filling cache')
-        files = (f[:-5] for f in list(filter(lambda f: '.hdf5' in f, os.listdir(self.root)))[:self.cache_size])
-        for file in files:
-            with h5py.File(os.path.join(self.root, file + '.hdf5'), 'r') as f:
-                self.cache[file] = list(f['data'])
-        print('Done')
-
-    def load_from_cache(self, file, i):
-        if file in self.cache:
-            return self.cache[file][i]
-        return self.load(file, i)
-
-    def __getitem__(self, index):
-        dest, i = self.dest[index]
-
-        sample = self.load_from_cache(dest, i)
-
-        sample = Image.open(io.BytesIO(sample))
-        sample = sample.convert('RGB')
-
-        if self.transform is not None:
-            sample = self.transform(sample)
-
-        return sample, self.targets[dest]
-
-    def __len__(self):
-        return len(self.dest)
 
 
 class ImageNet_Module(pl.LightningDataModule):
         def __init__(self, data_dir = 'Datasets/', shuffle_pixels=False, shuffle_labels=False, random_pixels=False):
                 super().__init__()
-                self.data_dir = data_dir
+                self.data_dir = '/ECSssd/data_sets/imagenet_2012'
                 self.mean = [0.485, 0.456, 0.406]
                 self.std = [0.229, 0.224, 0.225]
                 self.normalise = transforms.Normalize(mean=self.mean, std=self.std)
@@ -116,16 +68,13 @@ class ImageNet_Module(pl.LightningDataModule):
 
         def setup(self, stage=None):
                 if stage == 'fit' or stage is None:
-                        im_full = ImageNetHDF5(self.data_dir + 'train',  transform=self.transform)
+                        im_full = ImageFolder(self.data_dir + '/train',  transform=self.transform)
                         train_s = int(len(im_full)*0.9)
                         val_s = len(im_full) - train_s
                         self.train, self.val = random_split(im_full, [train_s, val_s])
-                        print(self.train)
-                        print(self.val)
 
                 if stage == 'test' or stage is None:
-                        self.test = ImageNetHDF5(self.data_dir + 'train', transform=self.transform)
-#                        self.test = ImageNetHDF5(self.data_dir + 'val', transform=self.transform)
+                        self.test = ImageFolder(self.data_dir + '/val', transform=self.transform)
 
         def train_dataloader(self):
                 return DataLoader(self.train, batch_size=self.bs, num_workers = 6)

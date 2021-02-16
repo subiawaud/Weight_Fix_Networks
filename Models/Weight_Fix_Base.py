@@ -52,9 +52,9 @@ class Weight_Fix_Base(pl.LightningModule):
         self.calculation_type = distance_calculation_type
         self.distance_calculator = Distance_Calculation(self.calculation_type)
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
-        self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance)
+        self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance, self.device)
         self.metric_logger = Metric_Capture(self)
-        self.converter = Converter(cluster_bit_fix, distance_calculation_type, zero_distance)
+        self.converter = Converter(cluster_bit_fix, distance_calculation_type, zero_distance, self.device)
         self.smallest_distance_allowed = smallest_distance_allowed
         self.cluster_bit_fix = cluster_bit_fix
         self.number_of_fixing_iterations = number_of_fixing_iterations
@@ -153,14 +153,14 @@ class Weight_Fix_Base(pl.LightningModule):
         ce = F.cross_entropy(y_hat, y)
         cluster_error = self.calculate_cluster_error(ce)
         loss = ce + cluster_error
-        result = pl.TrainResult(loss)
         acc = FM.accuracy(y_hat, y)
-        result.log_dict({'train_acc':acc, 'train_loss':loss}, prog_bar=True, logger = False)
-        return result
+        metric = {'train_acc':acc, 'train_loss':loss}
+        self.log_dict(metric, prog_bar=True, logger = False)
+        return metric
 
     def training_epoch_end(self, outputs):
-        accuracy = torch.stack([outputs['train_acc']]).mean()
-        loss = torch.stack([outputs['train_loss']]).mean()
+        accuracy = outputs['train_acc'].mean()
+        loss = outputs['train_loss'].mean()
         self.metric_logger.train_log(loss, accuracy, self.current_epoch)
         tensorboard_logs = {'Loss':loss, 'Accuracy': accuracy}
         epoch_dict = {'loss':loss, 'acc':accuracy}
@@ -310,34 +310,33 @@ class Weight_Fix_Base(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        result = pl.EvalResult(checkpoint_on=loss)
         acc = FM.accuracy(y_hat, y)
-        result.log_dict({'val_acc':acc, 'val_loss':loss}, prog_bar = True, logger = True)
-        return result
+        metrics = {'val_acc':acc, 'val_loss':loss}
+        self.log_dict(metrics, prog_bar = True, logger = True)
+        return metrics 
 
     def validation_epoch_end(self, outputs):
-        accuracy = torch.stack([outputs['val_acc']]).mean()
-        loss = torch.stack([outputs['val_loss']]).mean()
+        accuracy = outputs['val_acc'].mean()
+        loss = outputs['val_loss'].mean()
         self.metric_logger.validation_log(loss, accuracy, self.current_epoch)
-        result = pl.EvalResult(checkpoint_on=loss)
-        result.log('val_loss', loss, prog_bar=True, on_epoch=True,  logger=True)
-        return result
+        metrics = {'val_acc':accuracy, 'val_loss':loss}
+        self.log('val_loss', loss, prog_bar=True, on_epoch=True,  logger=True)
+        return metrics
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        result = pl.EvalResult()
         acc = FM.accuracy(y_hat, y)
         y_hat = y_hat.argmax(dim=1).detach().cpu()
         y = y.detach().cpu()
-        result.log_dict({'test_acc':acc, 'test_loss':loss, 'preds':y_hat, 'actual':y}, prog_bar=True, logger=False)
-        return result
+        metrics = {'test_acc':acc, 'test_loss':loss, 'preds':y_hat, 'actual':y}
+        self.log_dict(metrics, prog_bar=True, logger=False)
 
     def test_epoch_end(self, outputs):
-        accuracy = torch.stack([outputs['test_acc']]).mean()
-        loss = torch.stack([outputs['test_loss']]).mean()
+        accuracy = outputs['test_acc'].mean()
+        loss = outputs['test_loss'].mean()
         self.metric_logger.test_log(loss, accuracy, self.percentage_fixed, self.current_fixing_iteration)
-        result = pl.EvalResult()
-        result.log_dict({'test_acc':accuracy, 'test_loss':loss}, prog_bar=True, logger=False)
-        return result
+        metrics = {'test_acc':accuracy, 'test_loss':loss}
+        self.log_dict(metrics, prog_bar=True, logger=False)
+        return metrics
