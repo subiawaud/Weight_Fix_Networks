@@ -37,37 +37,37 @@ class Metric_Capture():
 
 
     def summarise_max_distance(self, max_distance, iteration):
-           self.outer_logger.experiment.add_scalar("Clusters/max_distance", max_distance, iteration, sync_dist=True)
+           self.outer_logger.experiment.add_scalar("Clusters/max_distance", max_distance, iteration)
 
     def summarise_mean_plus_std(self, val, iteration):
-           self.outer_logger.experiment.add_scalar("Clusters/mean_dist+std", val, iteration, sync_dist=True)
+           self.outer_logger.experiment.add_scalar("Clusters/mean_dist+std", val, iteration)
 
     def summarise_distance_allowed(self, distance_allowed, iteration):
-           self.outer_logger.experiment.add_scalar("Clusters/distance_allowed", distance_allowed, iteration, sync_dist=True)
+           self.outer_logger.experiment.add_scalar("Clusters/distance_allowed", distance_allowed, iteration)
 
     def summarise_distance_values(self, distances, iteration):
-           self.outer_logger.experiment.add_scalar("Clusters/median_distance", torch.median(distances), iteration, sync_dist=True)
-           self.outer_logger.experiment.add_scalar("Clusters/std_distance", torch.std(distances), iteration, sync_dist=True)
-           self.outer_logger.experiment.add_scalar("Clusters/mean_distance", torch.mean(distances),iteration, sync_dist=True)
+           self.outer_logger.experiment.add_scalar("Clusters/median_distance", torch.median(distances), iteration)
+           self.outer_logger.experiment.add_scalar("Clusters/std_distance", torch.std(distances), iteration)
+           self.outer_logger.experiment.add_scalar("Clusters/mean_distance", torch.mean(distances),iteration)
 
     def summarise_number_of_clusters(self, centroids, iteration):
         number = len(centroids)
-        self.outer_logger.experiment.add_scalar("Clusters/number_of_clusters", number, iteration, sync_dist=True)
+        self.outer_logger.experiment.add_scalar("Clusters/number_of_clusters", number, iteration)
 
     def train_log(self, loss, acc, iteration):
-           self.inner_logger.experiment.add_scalar("Loss/Train", loss, iteration, sync_dist=True)
-           self.inner_logger.experiment.add_scalar("Accuracy/Train", acc, iteration, sync_dist=True)
+           self.inner_logger.experiment.add_scalar("Loss/Train", loss, iteration)
+           self.inner_logger.experiment.add_scalar("Accuracy/Train", acc, iteration)
 
 
     def validation_log(self, loss, acc, iteration):
-           self.inner_logger.experiment.add_scalar("Loss/Val", loss, iteration, sync_dist=True)
-           self.inner_logger.experiment.add_scalar("Accuracy/Val", acc, iteration, sync_dist=True)
+           self.inner_logger.experiment.add_scalar("Loss/Val", loss, iteration)
+           self.inner_logger.experiment.add_scalar("Accuracy/Val", acc, iteration)
 
     def test_log(self, loss, acc, percentage_fixed, iteration):
         if not self.outer_logger is None:
-           self.outer_logger.experiment.add_scalar("Loss/Test", loss, iteration, sync_dist=True)
-           self.outer_logger.experiment.add_scalar("Accuracy/Test", acc, iteration, sync_dist=True)
-           self.outer_logger.experiment.add_scalar("Fixed_Percentage", percentage_fixed, iteration, sync_dist=True)
+           self.outer_logger.experiment.add_scalar("Loss/Test", loss, iteration)
+           self.outer_logger.experiment.add_scalar("Accuracy/Test", acc, iteration)
+           self.outer_logger.experiment.add_scalar("Fixed_Percentage", percentage_fixed, iteration)
 
     def summarise_clusters_selected(self, centroids, distances,mean_plus_std, distance_allowed, iteration):
         if not self.outer_logger is None:
@@ -82,7 +82,7 @@ class Metric_Capture():
         w = p.weight
         b = p.bias
         p = p[torch.abs(params) > 0.00001]
-        self.inner_logger.experiment.add_histogram(str(name) + '_weights', p, label, sync_dist=True)
+        self.inner_logger.experiment.add_histogram(str(name) + '_weights', p, label)
 
     def custom_histogram_adder(self, label = None):
         if label is None:

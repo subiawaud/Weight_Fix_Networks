@@ -1,7 +1,7 @@
 #!/bin/bash 
 #SBATCH -p  ecsstaff
 #SBATCH -A ecsstaff
-#SBATCH --mem=20G
+#SBATCH --mem=80G
 #SBATCH --gres=gpu:4
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=cc2u18@soton.ac.uk

@@ -42,9 +42,11 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
             orig_acc = trainer.test(model)[0]['test_acc']
             orig_entropy = model.get_weight_entropy()
             orig_params = model.get_number_of_u_params()
+        else:
+            trainer.test(model)
+           
 
 #        trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/iteration_{x}_final_model')
-        trainer.test(model)
         model.percentage_fixed = x
         model.apply_clustering_to_network()
         model.current_fixing_iteration +=1

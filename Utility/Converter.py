@@ -17,7 +17,7 @@ class Converter():
 
     def convert_to_pows_of_2(self, weights, first = False):
          import math
-         c = copy.deepcopy(weights.detach())
+         c = copy.deepcopy(weights.detach()).to(self.device)
          if first:
              c[torch.abs(c) < self.zero_distance] = 0 # set small values to be zero
          c[c > 0] = torch.pow(2, torch.max(torch.Tensor([-7]).to(self.device) , torch.round(torch.log2(c[c>0]))))

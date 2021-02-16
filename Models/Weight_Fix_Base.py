@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import torch.nn.utils.prune as prune
-from pytorch_lightning.metrics import functional as FM
+from pytorch_lightning.metrics import Accuracy
 from Models.CaptureOutputs import CaptureOutputs
 import matplotlib.pyplot as plt
 from scipy.stats import binned_statistic
@@ -153,18 +153,18 @@ class Weight_Fix_Base(pl.LightningModule):
         ce = F.cross_entropy(y_hat, y)
         cluster_error = self.calculate_cluster_error(ce)
         loss = ce + cluster_error
-        acc = FM.accuracy(y_hat, y)
-        metric = {'train_acc':acc, 'train_loss':loss}
-        self.log_dict(metric, prog_bar=True, logger = False)
+        acc = Accuracy(h_hat, y)
+        metric = {'train_loss':loss}
+        self.log_dict(metric, prog_bar=True, logger = False, sync_dist=True, on_epoch=True, on_step=True)
         return metric
 
-    def training_epoch_end(self, outputs):
-        accuracy = outputs['train_acc'].mean()
-        loss = outputs['train_loss'].mean()
-        self.metric_logger.train_log(loss, accuracy, self.current_epoch)
-        tensorboard_logs = {'Loss':loss, 'Accuracy': accuracy}
-        epoch_dict = {'loss':loss, 'acc':accuracy}
-        return epoch_dict
+#   def training_epoch_end(self, outputs):
+#       accuracy = outputs['train_acc']
+#       loss = outputs['train_loss']
+#       self.metric_logger.train_log(loss, accuracy, self.current_epoch)
+#       tensorboard_logs = {'Loss':loss, 'Accuracy': accuracy}
+#       epoch_dict = {'loss':loss, 'acc':accuracy}
+#       return epoch_dict
 
     def grab_shape(self, n, p):
         return p.shape
@@ -310,33 +310,33 @@ class Weight_Fix_Base(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        acc = FM.accuracy(y_hat, y)
+        acc = Accuracy(h_hat, y)
         metrics = {'val_acc':acc, 'val_loss':loss}
-        self.log_dict(metrics, prog_bar = True, logger = True)
+        self.log_dict(metrics, logger = True, prog_bar=True, sync_dist=True, on_epoch=True, on_step=True)
         return metrics 
 
-    def validation_epoch_end(self, outputs):
-        accuracy = outputs['val_acc'].mean()
-        loss = outputs['val_loss'].mean()
-        self.metric_logger.validation_log(loss, accuracy, self.current_epoch)
-        metrics = {'val_acc':accuracy, 'val_loss':loss}
-        self.log('val_loss', loss, prog_bar=True, on_epoch=True,  logger=True)
-        return metrics
+#    def validation_epoch_end(self, outputs):
+#       accuracy = outputs['val_acc']
+#       loss = outputs['val_loss']
+#       self.metric_logger.validation_log(loss, accuracy, self.current_epoch)
+#       metrics = {'val_acc':accuracy, 'val_loss':loss}
+#       self.log('val_loss', loss, on_epoch=True,  logger=True)
+#       return metrics
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        acc = FM.accuracy(y_hat, y)
-        y_hat = y_hat.argmax(dim=1).detach().cpu()
-        y = y.detach().cpu()
-        metrics = {'test_acc':acc, 'test_loss':loss, 'preds':y_hat, 'actual':y}
-        self.log_dict(metrics, prog_bar=True, logger=False)
-
-    def test_epoch_end(self, outputs):
-        accuracy = outputs['test_acc'].mean()
-        loss = outputs['test_loss'].mean()
-        self.metric_logger.test_log(loss, accuracy, self.percentage_fixed, self.current_fixing_iteration)
-        metrics = {'test_acc':accuracy, 'test_loss':loss}
-        self.log_dict(metrics, prog_bar=True, logger=False)
+        acc = Accuracy(h_hat, y)
+        metrics = {'test_acc':acc, 'test_loss':loss}
+        self.log_dict(metrics, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         return metrics
+
+#    def test_epoch_end(self, outputs):
+#        print('OUTPUTs', outputs)
+#        accuracy = outputs['test_acc']
+#        loss = outputs['test_loss']
+#        self.metric_logger.test_log(loss, accuracy, self.percentage_fixed, self.current_fixing_iteration)
+#        metrics = {'test_acc':accuracy, 'test_loss':loss}
+#        self.log_dict(metrics, prog_bar=True, logger=False)
+#        return metrics
