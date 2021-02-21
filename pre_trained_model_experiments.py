@@ -36,10 +36,10 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
           epochs = rest_epochs
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
-        trainer = pl.Trainer(gpus=-1, precision=16, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
         trainer.fit(model, data)
         if x == percentages[0]:
-            orig_acc = trainer.test(model)[0]['test_acc']
+            orig_acc = trainer.test(model)[0]['test_acc_epoch']
             orig_entropy = model.get_weight_entropy()
             orig_params = model.get_number_of_u_params()
         else:
@@ -58,12 +58,12 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 name = experiment_name
                 )
     model.set_loggers(logger, outer_logger)
-    trainer = pl.Trainer(gpus=-1, accelerator='ddp', precision=16, max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
+    trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
     model.reset_optim(epochs)
     trainer.fit(model, data)
     trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
     model.print_unique_params()
-    acc = trainer.test(model, ckpt_path=None)[0]['test_acc']
+    acc = trainer.test(model, ckpt_path=None)[0]['test_acc_epoch']
     model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd)
 
 def get_model(model, data):

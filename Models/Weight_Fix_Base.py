@@ -31,6 +31,9 @@ class Weight_Fix_Base(pl.LightningModule):
         self.tracking_gradients = False
         self.percentage_fixed = 0
         self.layers_fixed = None
+        self.taccuracy = pl.metrics.Accuracy()
+        self.ttaccuracy = pl.metrics.Accuracy()
+        self.vaccuracy = pl.metrics.Accuracy()
 
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs
@@ -153,11 +156,13 @@ class Weight_Fix_Base(pl.LightningModule):
         ce = F.cross_entropy(y_hat, y)
         cluster_error = self.calculate_cluster_error(ce)
         loss = ce + cluster_error
-        acc = Accuracy(h_hat, y)
-        metric = {'train_loss':loss}
-        self.log_dict(metric, prog_bar=True, logger = False, sync_dist=True, on_epoch=True, on_step=True)
-        return metric
+        acc = self.taccuracy(y_hat, y)
+        self.log('train_loss',loss, prog_bar=True, logger = False, sync_dist=True, on_epoch=True)
+        return loss
 
+    def training_epoch_end(self, o):
+         self.log('train_acc_epoch', self.taccuracy.compute())
+        
 #   def training_epoch_end(self, outputs):
 #       accuracy = outputs['train_acc']
 #       loss = outputs['train_loss']
@@ -310,10 +315,12 @@ class Weight_Fix_Base(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        acc = Accuracy(h_hat, y)
-        metrics = {'val_acc':acc, 'val_loss':loss}
-        self.log_dict(metrics, logger = True, prog_bar=True, sync_dist=True, on_epoch=True, on_step=True)
-        return metrics 
+        acc = self.vaccuracy(y_hat, y)
+        self.log('val_loss', loss, logger = True, prog_bar=True, sync_dist=True, on_epoch=True, on_step=True)
+        return loss 
+
+    def validation_epoch_end(self, o):
+        self.log('validation_acc_epoch', self.vaccuracy.compute())
 
 #    def validation_epoch_end(self, outputs):
 #       accuracy = outputs['val_acc']
@@ -327,11 +334,12 @@ class Weight_Fix_Base(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        acc = Accuracy(h_hat, y)
-        metrics = {'test_acc':acc, 'test_loss':loss}
-        self.log_dict(metrics, logger=True, sync_dist=True, on_step=True, on_epoch=True)
-        return metrics
+        acc = self.ttaccuracy(y_hat, y)
+        self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        return loss
 
+    def test_epoch_end(self, o):
+        self.log('test_acc_epoch', self.ttaccuracy.compute())
 #    def test_epoch_end(self, outputs):
 #        print('OUTPUTs', outputs)
 #        accuracy = outputs['test_acc']
