@@ -17,12 +17,12 @@ class Converter():
 
     def convert_to_pows_of_2(self, weights, first = False):
          import math
-         c = copy.deepcopy(weights.detach()).to(self.device)
+         c = copy.deepcopy(weights.detach()).type_as(weights)
          if first:
              c[torch.abs(c) < self.zero_distance] = 0 # set small values to be zero
-         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([-7]).to(self.device) , torch.round(torch.log2(c[c>0]))))
-         a = torch.log2(torch.abs(c[c < 0]).to(self.device))
-         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([-7]).to(self.device), torch.round(a)))
+         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([-7]).type_as(weights), torch.round(torch.log2(c[c>0]))))
+         a = torch.log2(torch.abs(c[c < 0]).type_as(weights))
+         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([-7]).type_as(weights), torch.round(a)))
          return c
 
 
@@ -30,7 +30,7 @@ class Converter():
         current = self.convert_to_pows_of_2(weights, True)
         for x in range(self.pow_2_level):
             diff = weights - current
-            next = torch.zeros(len(weights)).to(self.device)
+            next = torch.zeros(len(weights)).type_as(weights)
             diff_pow_2 = self.convert_to_pows_of_2(diff)
             if self.distance_type == "relative":
                 diff_dist = torch.abs(distance *  weights)

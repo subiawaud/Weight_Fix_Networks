@@ -27,7 +27,7 @@ class Cluster_Determination():
         if torch.sum(flatten_is_fixed) <= 1:
             return distances
         for c in range(clusters.size()[1]):
-            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], torch.tensor(0.0).to(self.device), torch.tensor(1.0).to(self.device))
+            new_vals = torch.where(flattened_weights[flatten_is_fixed] == clusters[0, c], torch.tensor(0.0).type_as(flattened_weights), torch.tensor(1.0).type_as(flattened_weights))
             distances[flatten_is_fixed, c] = new_vals
         return distances
 
@@ -102,7 +102,7 @@ class Cluster_Determination():
             weights_to_cluster = self.grab_only_those_not_fixed()
         elif weights_to_cluster is None:
             weights_to_cluster = self.flattener.flatten_network_tensor()
-        distances = torch.zeros(weights_to_cluster.size()[0], cluster_centers.size()[1]).to('cuda')
+        distances = torch.zeros(weights_to_cluster.size()[0], cluster_centers.size()[1]).type_as(weights_to_cluster)
         distances = self.distance_calculator.distance_calc(weights_to_cluster, cluster_centers, distances, requires_grad)
         return distances, weights_to_cluster
 
@@ -110,6 +110,6 @@ class Cluster_Determination():
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
         distances, weights_to_cluster = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
         e = 1e-12
-        cluster_weight_assignment = F.softmin(distances + e)
+        cluster_weight_assignment = F.softmin(distances + e, dim =1)
         weighted = self.weighting_function(cluster_weight_assignment, distances, weights_to_cluster)
         return torch.mean(weighted)

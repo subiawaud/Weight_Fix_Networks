@@ -156,20 +156,12 @@ class Weight_Fix_Base(pl.LightningModule):
         ce = F.cross_entropy(y_hat, y)
         cluster_error = self.calculate_cluster_error(ce)
         loss = ce + cluster_error
-        acc = self.taccuracy(y_hat, y)
-        self.log('train_loss',loss, prog_bar=True, logger = False, sync_dist=True, on_epoch=True)
+        acc = self.taccuracy(F.softmax(y_hat, dim=1), y)
+        self.log('train_loss',loss, prog_bar=False, logger = False, sync_dist=True, on_epoch=True)
         return loss
 
     def training_epoch_end(self, o):
          self.log('train_acc_epoch', self.taccuracy.compute())
-        
-#   def training_epoch_end(self, outputs):
-#       accuracy = outputs['train_acc']
-#       loss = outputs['train_loss']
-#       self.metric_logger.train_log(loss, accuracy, self.current_epoch)
-#       tensorboard_logs = {'Loss':loss, 'Accuracy': accuracy}
-#       epoch_dict = {'loss':loss, 'acc':accuracy}
-#       return epoch_dict
 
     def grab_shape(self, n, p):
         return p.shape
@@ -189,47 +181,16 @@ class Weight_Fix_Base(pl.LightningModule):
     def flatten_is_fixed(self):
         return self.flattener.flatten_standard(self.is_fixed)
 
-    def register_hooks(self):
-        handles = []
-        hooks = {}
-        for name, layer in self.named_modules():
-                hooks[name] = CaptureOutputs()
-                handles.append(layer.register_forward_hook(hooks[name]))
-        return handles, hooks
-
-    def pass_through_training_data(self):
-        train_loader = self.train_dataloader()
-        for id, (x, y) in enumerate(train_loader):
-            self(x.to(self.device))
-            return
-
-    def summarise_hooks(self, hooks):
-        for k, v in hooks.items():
-            v.summarise()
-
-    def remove_handles(self, hooks):
-        for h in hooks:
-            h.remove()
-
-    def forward_pass_with_hook(self):
-        handles, hooks = self.register_hooks()
-        self.pass_through_training_data()
-        self.summarise_hooks(hooks)
-        self.remove_handles(handles)
-
     def determine_which_weights_are_newly_fixed(self, idx, flattened_network):
         currently_fixed_indicies = np.argwhere(flattened_network.cpu())
         return np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
 
     def calculate_threshold_value(self, distances_of_newly_fixed):
-        # so I was doing this wrong??? shouldn't it be mean(abs(distances))
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
-
 
     def calculate_allowable_distance(self):
         a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
         if self.number_of_clusters >= 100: # to stop out of memory issues
-            print('ABORT')
             a *= 2
         return a
 
@@ -263,10 +224,9 @@ class Weight_Fix_Base(pl.LightningModule):
             start = count
             count += np.prod(s)
             self.is_fixed[i] = is_clustered_list[start:count].reshape(s) > 0
+            print(f'Fixed this layer {i} is {torch.sum(self.is_fixed[i])}')
             self.fixed_weights[i] = clustered_weights[start:count].reshape(s).to(self.device)
             fixed += torch.sum(self.is_fixed[i])
-        print('The number fixed is ', fixed.cpu().numpy())
-
 
     def print_unique_params(self):
         return self.parameter_iterator.iteratate_all_parameters_and_apply(self.metric_logger.print_the_number_of_unique_params)
@@ -287,8 +247,9 @@ class Weight_Fix_Base(pl.LightningModule):
            idx = range(number_fixed)
         newly_fixed = self.determine_which_weights_are_newly_fixed(idx, self.flattener.flatten_standard(self.is_fixed))
         threshold_val = self.calculate_threshold_value(closest_cluster_distance[newly_fixed])
-        print('current Val ', threshold_val)
-        if threshold_val > self.calculate_allowable_distance() and self.current_fixing_iteration > 1:
+        print('threshold val is', self.calculate_allowable_distance())
+        print('current val  ', threshold_val)
+        if threshold_val > self.calculate_allowable_distance():
              print('centroids are', centroids)
              print('number of centroids', self.number_of_clusters)
              return self.threshold_breached_handler(weights, percentage, quantised_weights)
@@ -315,36 +276,20 @@ class Weight_Fix_Base(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        acc = self.vaccuracy(y_hat, y)
+        acc = self.vaccuracy(F.softmax(y_hat, dim =1), y)
         self.log('val_loss', loss, logger = True, prog_bar=True, sync_dist=True, on_epoch=True, on_step=True)
         return loss 
 
     def validation_epoch_end(self, o):
         self.log('validation_acc_epoch', self.vaccuracy.compute())
 
-#    def validation_epoch_end(self, outputs):
-#       accuracy = outputs['val_acc']
-#       loss = outputs['val_loss']
-#       self.metric_logger.validation_log(loss, accuracy, self.current_epoch)
-#       metrics = {'val_acc':accuracy, 'val_loss':loss}
-#       self.log('val_loss', loss, on_epoch=True,  logger=True)
-#       return metrics
-
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
-        acc = self.ttaccuracy(y_hat, y)
+        acc = self.ttaccuracy(F.softmax(y_hat, dim =1), y)
         self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         return loss
 
     def test_epoch_end(self, o):
         self.log('test_acc_epoch', self.ttaccuracy.compute())
-#    def test_epoch_end(self, outputs):
-#        print('OUTPUTs', outputs)
-#        accuracy = outputs['test_acc']
-#        loss = outputs['test_loss']
-#        self.metric_logger.test_log(loss, accuracy, self.percentage_fixed, self.current_fixing_iteration)
-#        metrics = {'test_acc':accuracy, 'test_loss':loss}
-#        self.log_dict(metrics, prog_bar=True, logger=False)
-#        return metrics

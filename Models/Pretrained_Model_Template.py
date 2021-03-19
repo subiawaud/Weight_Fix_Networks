@@ -20,9 +20,8 @@ class Pretrained_Model_Template(Weight_Fix_Base):
         self.pretrained = original_model
         self.max_epochs = max_epochs
         self.lr = lr
-        self.weight_decay = 1e-4
+        self.weight_decay = 0.0005
         self.batch_size = data_module.bs
-        self.batch_size = 256
         self.train_size = len(data_module.train_dataloader().dataset)
         self.use_sched = use_sched
         self.opt = opt
@@ -33,16 +32,17 @@ class Pretrained_Model_Template(Weight_Fix_Base):
                self.optim = torch.optim.Adam(self.parameters(), lr = self.lr)
            elif self.opt == 'SGD':
                self.optim = torch.optim.SGD(self.parameters(), lr=self.lr,
-                      momentum=0.9, weight_decay=5e-4)
+                      momentum=0.9, weight_decay=self.weight_decay)
            else:
                print('NO OPTIMIZER ')
 
            self.scheduler = None
            if self.use_sched:
+              self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=self.max_epochs//3, gamma=0.1)
               # self.scheduler =   torch.optim.lr_scheduler.CosineAnnealingLR(self.optim, T_max = max_epochs+1)
-               self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
-                                                                        steps_per_epoch=int(1*self.train_size)//self.batch_size,
-                                                                         epochs=max_epochs+1)
+              # self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
+              #                                                         steps_per_epoch=int(1*self.train_size)//self.batch_size,
+              #                                                          epochs=max_epochs+1)
 
     def forward(self, x):
         return self.pretrained(x)
