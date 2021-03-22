@@ -41,8 +41,17 @@ class Cluster_Determination():
 
         closest_cluster, closest_cluster_index =  torch.min(distances, dim=1)
         if self.distance_type == 'relative':
-            large = torch.abs(closest_cluster) > self.zero_distance
-            closest_cluster[large] = torch.abs(closest_cluster[large] / (weights[large] + 1e-10))
+            print('relative before')
+            large = torch.abs(weights) > self.zero_distance
+            print(weights[large])
+            print(weights[~large])
+            print(closest_cluster[large])
+            print(closest_cluster[~large])
+            closest_cluster[large] = torch.abs(closest_cluster[large] / (weights[large]))
+#            closest_cluster[~large] = torch.abs(weights[~large] / (5*self.zero_distance))
+            print('relative after')
+            print(closest_cluster[large])
+            print(closest_cluster[~large])
         return closest_cluster, closest_cluster_index
 
     def find_closest_centroids(self, values, number_of_clusters):
