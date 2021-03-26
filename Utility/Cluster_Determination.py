@@ -43,11 +43,15 @@ class Cluster_Determination():
         if self.distance_type == 'relative':
             print('relative before')
             large = torch.abs(weights) > self.zero_distance
+        
             print(weights[large])
             print(weights[~large])
             print(closest_cluster[large])
             print(closest_cluster[~large])
+            print('index of small', torch.where(~large))
+            print('number small', torch.sum(~large))
             closest_cluster[large] = torch.abs(closest_cluster[large] / (weights[large]))
+            closest_cluster[~large] = 0
 #            closest_cluster[~large] = torch.abs(weights[~large] / (5*self.zero_distance))
             print('relative after')
             print(closest_cluster[large])
@@ -91,6 +95,15 @@ class Cluster_Determination():
             else:
                 indices.extend(list(range(start, count)))
         return np.array(indices)
+
+    def select_not_layer_wise(self, distances, distance_allowed, percentage):
+        distances = distances.detach().cpu().numpy()
+        number = int(len(distances)*percentage)
+        smallest_idx = np.argpartition(distances, number)[:number]
+        print('distances in select', distances[smallest_idx])
+        print('smallest' , smallest_idx)
+        return smallest_idx
+        
 
     def standard_weighting(self, weighting, distance):
         return torch.sum(torch.square(weighting * distance), axis =1)

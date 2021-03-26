@@ -183,9 +183,18 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def determine_which_weights_are_newly_fixed(self, idx, flattened_network):
         currently_fixed_indicies = np.argwhere(flattened_network.cpu())
-        return np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
+        new_fixed = np.setdiff1d(idx, currently_fixed_indicies)
+#        new_fixed = np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
+        print('currently fixed indicies', currently_fixed_indicies)
+        print('indexes', idx)
+        print('newly fixed indexes', new_fixed)
+        return new_fixed
 
     def calculate_threshold_value(self, distances_of_newly_fixed):
+        print('distances to be fixed', distances_of_newly_fixed)
+        print('mean to be fixed', torch.mean(distances_of_newly_fixed))
+        print(torch.max(distances_of_newly_fixed))
+        print(torch.sum(distances_of_newly_fixed > 0))
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
@@ -194,18 +203,12 @@ class Weight_Fix_Base(pl.LightningModule):
             a *= 2
         return a
 
-    def determine_which_weights_from_layers_should_be_clustered(self, closest_cluster_distances, allowable_distance, percentage):
-        if percentage != 1.0:
-            idx = self.cluster_determinator.select_layer_wise(closest_cluster_distances, allowable_distance, percentage)
-        else:
-            return range(number_fixed - 1)
-
     def calculate_how_many_to_fix(self, weights, percentage):
         return int(round(len(weights)*percentage, 2))
 
     def threshold_breached_handler(self, weights, percentage, quantised_weights):
          self.number_of_clusters += 1
-         if (self.number_of_clusters == 5 or (self.number_of_clusters % 5 == 0 and self.number_of_clusters >= 8)) and self.cluster_bit_fix == "pow_2_add":
+         if (self.number_of_clusters == 6 or (self.number_of_clusters % 5 == 0 and self.number_of_clusters >= 8)) and self.cluster_bit_fix == "pow_2_add":
                  self.converter.increase_pow_2_level()
                  return self.apply_clustering_to_network()
          return self.apply_clustering_to_network(quantised_weights)
@@ -240,9 +243,11 @@ class Weight_Fix_Base(pl.LightningModule):
         centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
         self.centroid_to_regularise_to = centroid_to_regularise_to
         closest_cluster_distance, closest_cluster_list = self.cluster_determinator.closest_cluster(weights, centroids, self.current_fixing_iteration)
-        self.determine_which_weights_from_layers_should_be_clustered(closest_cluster_distance, percentage, number_fixed)
+#        self.determine_which_weights_from_layers_should_be_clustered(closest_cluster_distance, percentage, number_fixed)
         if percentage != 1.0:
             idx = self.cluster_determinator.select_layer_wise(closest_cluster_distance, self.smallest_distance_allowed, percentage)
+            #idx = self.cluster_determinator.select_not_layer_wise(closest_cluster_distance, self.smallest_distance_allowed, percentage)
+            print('idx selected' , idx)
         else:
            idx = range(number_fixed)
         newly_fixed = self.determine_which_weights_are_newly_fixed(idx, self.flattener.flatten_standard(self.is_fixed))
@@ -257,6 +262,9 @@ class Weight_Fix_Base(pl.LightningModule):
         self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration)
         self.assign_weights_to_clusters(weights, clustered)
 
+    def save_clusters(self):
+        print('not needed')
+        
     def update_gradient_data_tracker(self, i, grad):
         if self.tracking_gradients:
             self.grads[i] = np.abs(grad.data.cpu().detach().numpy())

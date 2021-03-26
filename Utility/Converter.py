@@ -10,7 +10,6 @@ class Converter():
         self.zero_distance = zero_distance
         self.device = device
 
-
     def increase_pow_2_level(self):
         print('INCREASING POW LEVEL')
         self.pow_2_level += 1
@@ -20,9 +19,9 @@ class Converter():
          c = copy.deepcopy(weights.detach()).type_as(weights)
          if first:
              c[torch.abs(c) < self.zero_distance] = 0 # set small values to be zero
-         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([-10]).type_as(weights), torch.round(torch.log2(c[c>0]))))
+         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([-7 - self.pow_2_level]).type_as(weights), torch.round(torch.log2(c[c>0]))))
          a = torch.log2(torch.abs(c[c < 0]).type_as(weights))
-         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([-10]).type_as(weights), torch.round(a)))
+         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([-7 - self.pow_2_level]).type_as(weights), torch.round(a)))
          return c
 
 
@@ -38,6 +37,7 @@ class Converter():
                 diff_dist = distance
             to_change = torch.abs(diff) > diff_dist
             to_change = torch.logical_and(to_change, current !=0)
+            print('level', x, ' ', torch.sum(to_change), ' going further')
             next[to_change] = diff_pow_2[to_change]
             current = next + current
         return current
