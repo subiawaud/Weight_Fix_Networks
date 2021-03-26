@@ -23,7 +23,8 @@ class ImageNet_Module(pl.LightningDataModule):
                 self.target_transform = self.target_transform_select(shuffle_labels)
                 self.targets = 1000
                 self.dims = (3,224,224)
-                self.bs = 256
+                self.bs = 128
+#                torch.distributed.init_process_group('nccl')
                 self.name = 'ImageNet'
 
         def target_transform_select(self, shuffle_labels = False):
@@ -77,10 +78,13 @@ class ImageNet_Module(pl.LightningDataModule):
                         self.test = ImageFolder(self.data_dir + '/val', transform=self.transform)
 
         def train_dataloader(self):
-                return DataLoader(self.train, batch_size=self.bs, num_workers = 6)
+#'                sampler = torch.utils.data.distributed.DistributedSampler(self.train)
+                return DataLoader(self.train, batch_size=self.bs, num_workers = 8, pin_memory=True)#, sampler=sampler)
 
         def val_dataloader(self):
-                return DataLoader(self.val, batch_size=self.bs, num_workers = 6)
+#                sampler = torch.utils.data.distributed.DistributedSampler(self.val)
+                return DataLoader(self.val, batch_size=self.bs, num_workers = 8, pin_memory=True)#, sampler=sampler)
 
         def test_dataloader(self):
-                return DataLoader(self.test, batch_size=self.bs, num_workers = 6)
+#                sampler = torch.utils.data.distributed.DistributedSampler(self.test)
+                return DataLoader(self.test, batch_size=self.bs, num_workers = 8, pin_memory=True)#, sampler=sampler)
