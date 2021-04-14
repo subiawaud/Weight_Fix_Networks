@@ -40,7 +40,6 @@ class Cluster_Determination():
         newly_fixed_distances = self.distance_calculator.distance_calc(flattened_weights[~flatten_is_fixed], clusters, distances[~flatten_is_fixed], requires_grad = False)
         distances[~flatten_is_fixed] = newly_fixed_distances
        
-
         closest_cluster, closest_cluster_index =  torch.min(distances, dim=1)
         if self.distance_type == 'relative':
             small = (torch.abs(weights) < self.zero_distance)
@@ -51,24 +50,71 @@ class Cluster_Determination():
 #            closest_cluster[small] = 0
         return closest_cluster, closest_cluster_index
 
-#    def find_closest_centroids(self, values, number_of_clusters):
-#        val, count = np.unique(values.cpu(), return_counts = True)
-#        print(val, count)
-#        number_of_clusters+= 1
-#        if number_of_clusters > len(count):
-#             idx = np.argpartition(count, -len(count))[-len(count):]
-#        else:
-#             idx = np.argpartition(count, -number_of_clusters)[-number_of_clusters:]
-#        selected = val[idx]
-#        print('selected', selected)
-#        clusters = torch.Tensor([selected]).to(self.model.device)
-#        e = 1e-16
-#        if len(np.unique(selected)) < 2:
-#            selected = np.unique(selected)
-#        else:
-#            selected = np.unique(selected[1:]) # we take all but the last to be our clusters
-#
-#        return torch.Tensor([selected]), clusters
+    def get_clusters(mi, d):
+        if mi < 0:
+            ma = (d*mi + mi)*(1 - d) 
+        else:
+            ma = (d*mi + mi)/(1 - d)
+        return ma 
+
+
+
+    def create_possible_centroids(max_weight, min_weight, a, powl):
+           vals = np.zeros(10000)
+           ma = min_weight 
+           i = 0 
+           while(ma < max_weight):
+                 vals[i] = ma
+                 if abs(ma) < self.zero_distance:
+                      ma = 0
+                 if ma == 0:
+                      ma = self.zero_distance
+                 else:
+                      ma = self.get_clusters(ma, a)
+                 i += 1
+           return torch.unique(convert_to_add_pows_of_2(torch.Tensor(vals),a, powl)) 
+
+    def find_the_next_cluster(self, weights, is_fixed, vals, zero_index,  max_dist, to_cluster):
+        distances = (torch.abs(weights[is_fixed] - vals.unsqueeze(1) ) / (torch.abs(weights[is_fixed])+1e-7)) # take the distances between weights and vals
+        if zero_index:
+            distances[zero_index,(torch.abs(weights[is_fixed] )<self.zero_distance).squeeze()] = 0 
+        u, c = torch.unique(distances.argmin(0), return_counts = True)
+        am = u[torch.argmax(c)] # which cluster has the most local weights   
+        local_cluster_distances = distances[am, :]
+        sorted_indexes = np.argsort(local_cluster_distances) #sort them by index
+        rolling_mean = np.cumsum(local_cluster_distances[sorted_indexes]) / np.arange(1, len(sorted_indexes)+1)
+        first_larger = np.argmax(rolling_mean >= max_dist)  # which is the first distance larger than the max_dist
+        if first_larger > to_cluster or (first_larger == 0 and rolling_mean[-1] <= max_dist):
+            return sorted_indexes[:to_cluster], vals[am], local_cluster_distances[sorted_indexes[:to_cluster]]
+        else:
+            return sorted_indexes[:first_larger], vals[am], local_cluster_distances[sorted_indexes[:first_larger]]
+    
+    def get_the_clusters(self, percent, a):
+        weights = self.flattener.flatten_network_tensor()
+        #is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
+        is_fixed = torch.ones_like(weights).bool()
+        taken = 0
+        ap2 = 0
+        to_take = int(len(weights)*percent)
+        clusters = []
+        new_weight_set = torch.zeros_like(weights).type_as(weights)
+        distances = torch.zeros_like(weights).type_as(weights)
+        while(taken < to_take):
+           vals = self.create_possible_centroids(torch.max(weights[is_fixed]), torch.min(weights[is_fixed]), a, ap2)
+           needed = to_take - taken
+           indicies, cluster, dist  = self.find_the_next_cluster(weights, is_fixed, vals, torch.where(vals==0), max_dist=a, to_cluster = needed)
+           parent_idx = np.arange(weights.size()[0])[is_fixed.squeeze()][indicies]
+           new_weight_set[parent_idx] = cluster
+           distances[parent_idx] = dist
+           taken += len(indicies)
+           clusters.append(cluster)
+           is_fixed[parent_idx] = False
+           if len(indicies) == 0:
+               print('increasing')
+               ap2 += 1
+        clusters = torch.unique(torch.Tensor(clusters)).type_as(weights)
+        self.is_fixed = is_fixed
+        return clusters, is_fixed, distances, new_weight_set
 
     def select_layer_wise(self, distances, distance_allowed, percentage):
         distances = distances.detach().cpu().numpy()
@@ -112,19 +158,19 @@ class Cluster_Determination():
         flatten_is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
         return flattened_model_weights[~flatten_is_fixed]
 
-    def get_cluster_distances(self, weights_to_cluster = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
-        if weights_to_cluster is None and only_not_fixed:
-            weights_to_cluster = self.grab_only_those_not_fixed()
-        elif weights_to_cluster is None:
-            weights_to_cluster = self.flattener.flatten_network_tensor()
-        distances = torch.zeros(weights_to_cluster.size()[0], cluster_centers.size()[1]).type_as(weights_to_cluster)
-        distances = self.distance_calculator.distance_calc(weights_to_cluster, cluster_centers, distances, requires_grad)
-        return distances, weights_to_cluster
+    def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
+        if is_fixed is None and only_not_fixed:
+            is_fixed = self.grab_only_those_not_fixed()
+        elif is_fixed is None:
+            is_fixed = self.flattener.flatten_network_tensor()
+        distances = torch.zeros(is_fixed.size()[0], cluster_centers.size()[1]).type_as(is_fixed)
+        distances = self.distance_calculator.distance_calc(is_fixed, cluster_centers, distances, requires_grad)
+        return distances, is_fixed
 
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
-        distances, weights_to_cluster = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
+        distances, is_fixed = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
         e = 1e-12
         cluster_weight_assignment = F.softmin(distances + e, dim =1)
-        weighted = self.weighting_function(cluster_weight_assignment, distances, weights_to_cluster)
+        weighted = self.weighting_function(cluster_weight_assignment, distances, is_fixed)
         return torch.mean(weighted)
