@@ -19,6 +19,7 @@ from Utility.Flattener import Flattener
 from Utility.Metric_Capture import Metric_Capture
 from Utility.Parameter_Iterator import *
 from scipy.stats import entropy
+from kmeans_pytorch import kmeans
 
 
 
@@ -62,9 +63,8 @@ class Weight_Fix_Base(pl.LightningModule):
         self.cluster_bit_fix = cluster_bit_fix
         self.number_of_fixing_iterations = number_of_fixing_iterations
         self.how_many_iterations_not_regularised = how_many_iterations_not_regularised
-        self.centroid_list = torch.Tensor([[0]]).to(self.device)
         self.regularisation_ratio = regularisation_ratio
-        self.number_of_clusters = 1
+        self.number_of_clusters = 3
 
     def set_up_fixed_weight_array(self):
         self.fixed_weights = self.parameter_iterator.iteratate_all_parameters_and_append([], append_zeros=True)
@@ -193,12 +193,14 @@ class Weight_Fix_Base(pl.LightningModule):
     def calculate_threshold_value(self, distances_of_newly_fixed):
         print('distances to be fixed', distances_of_newly_fixed)
         print('mean to be fixed', torch.mean(distances_of_newly_fixed))
-        print(torch.max(distances_of_newly_fixed))
-        print(torch.sum(distances_of_newly_fixed > 0))
+        print('max to be fixed', torch.max(distances_of_newly_fixed))
+#        print(torch.sum(distances_of_newly_fixed > 0))
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
+#        return torch.max(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
-        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
+#        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
+        a = self.smallest_distance_allowed
         if self.number_of_clusters >= 100: # to stop out of memory issues
             a *= 2
         return a
@@ -208,7 +210,7 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def threshold_breached_handler(self, weights, percentage, quantised_weights):
          self.number_of_clusters += 1
-         if (self.number_of_clusters == 6 or (self.number_of_clusters % 5 == 0 and self.number_of_clusters >= 8)) and self.cluster_bit_fix == "pow_2_add":
+         if (self.number_of_clusters == 10 or (self.number_of_clusters % 30 == 0)) and self.cluster_bit_fix == "pow_2_add":
                  self.converter.increase_pow_2_level()
                  return self.apply_clustering_to_network()
          return self.apply_clustering_to_network(quantised_weights)
@@ -240,9 +242,14 @@ class Weight_Fix_Base(pl.LightningModule):
         number_fixed = self.calculate_how_many_to_fix(weights, percentage)
         if quantised_weights is None:
             quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
-        centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
-        self.centroid_to_regularise_to = centroid_to_regularise_to
+        #centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
+        print(weights.size(), weights.unsqueeze(1).size(), self.number_of_clusters)
+        _, centroids = kmeans(weights.unsqueeze(1), self.number_of_clusters, distance = 'euclidean', device=self.device)
+        centroids = self.converter.round_to_precision(centroids.type_as(weights).detach(), self.calculate_allowable_distance())
+        centroids[torch.argmin(centroids)] = 0 
+        self.centroid_to_regularise_to = centroids
         closest_cluster_distance, closest_cluster_list = self.cluster_determinator.closest_cluster(weights, centroids, self.current_fixing_iteration)
+        print('closest cluster distances', closest_cluster_distance)
 #        self.determine_which_weights_from_layers_should_be_clustered(closest_cluster_distance, percentage, number_fixed)
         if percentage != 1.0:
             idx = self.cluster_determinator.select_layer_wise(closest_cluster_distance, self.smallest_distance_allowed, percentage)
@@ -261,6 +268,12 @@ class Weight_Fix_Base(pl.LightningModule):
         weights, clustered = self.gather_assigned_clusters(centroids, idx, closest_cluster_list, weights)
         self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration)
         self.assign_weights_to_clusters(weights, clustered)
+        self.reset_cluster_nums()
+
+    def reset_cluster_nums(self):
+        self.number_of_clusters = 3
+        self.converter.reset()
+        
 
     def save_clusters(self):
         print('not needed')

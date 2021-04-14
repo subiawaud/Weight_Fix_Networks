@@ -32,50 +32,43 @@ class Cluster_Determination():
         return distances
 
     def closest_cluster(self,weights,  clusters, iteration):
+        print('calling closest cluster', clusters, clusters.size())
         flattened_weights = self.flattener.flatten_network_tensor()
         flatten_is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
         distances = torch.ones(flattened_weights.size()[0], clusters.size()[1]).to('cuda') # create a zero matrix for each of the distances to clusters
         distances = self.set_the_distances_of_already_fixed(flattened_weights, flatten_is_fixed, clusters, distances)
         newly_fixed_distances = self.distance_calculator.distance_calc(flattened_weights[~flatten_is_fixed], clusters, distances[~flatten_is_fixed], requires_grad = False)
         distances[~flatten_is_fixed] = newly_fixed_distances
+       
 
         closest_cluster, closest_cluster_index =  torch.min(distances, dim=1)
         if self.distance_type == 'relative':
-            print('relative before')
-            large = torch.abs(weights) > self.zero_distance
-        
-            print(weights[large])
-            print(weights[~large])
-            print(closest_cluster[large])
-            print(closest_cluster[~large])
-            print('index of small', torch.where(~large))
-            print('number small', torch.sum(~large))
-            closest_cluster[large] = torch.abs(closest_cluster[large] / (weights[large]))
-            closest_cluster[~large] = 0
-#            closest_cluster[~large] = torch.abs(weights[~large] / (5*self.zero_distance))
-            print('relative after')
-            print(closest_cluster[large])
-            print(closest_cluster[~large])
+            small = (torch.abs(weights) < self.zero_distance)
+            print('index of small', torch.where(small))
+            print('percent small', torch.sum(small))
+            print(len(weights))
+            closest_cluster[~small] = torch.abs(closest_cluster[~small] / (weights[~small]))
+#            closest_cluster[small] = 0
         return closest_cluster, closest_cluster_index
 
-    def find_closest_centroids(self, values, number_of_clusters):
-        val, count = np.unique(values.cpu(), return_counts = True)
-        print(val, count)
-        number_of_clusters+= 1
-        if number_of_clusters > len(count):
-             idx = np.argpartition(count, -len(count))[-len(count):]
-        else:
-             idx = np.argpartition(count, -number_of_clusters)[-number_of_clusters:]
-        selected = val[idx]
-        print('selected', selected)
-        clusters = torch.Tensor([selected]).to(self.model.device)
-        e = 1e-16
-        if len(np.unique(selected)) < 2:
-            selected = np.unique(selected)
-        else:
-            selected = np.unique(selected[1:]) # we take all but the last to be our clusters
-
-        return torch.Tensor([selected]), clusters
+#    def find_closest_centroids(self, values, number_of_clusters):
+#        val, count = np.unique(values.cpu(), return_counts = True)
+#        print(val, count)
+#        number_of_clusters+= 1
+#        if number_of_clusters > len(count):
+#             idx = np.argpartition(count, -len(count))[-len(count):]
+#        else:
+#             idx = np.argpartition(count, -number_of_clusters)[-number_of_clusters:]
+#        selected = val[idx]
+#        print('selected', selected)
+#        clusters = torch.Tensor([selected]).to(self.model.device)
+#        e = 1e-16
+#        if len(np.unique(selected)) < 2:
+#            selected = np.unique(selected)
+#        else:
+#            selected = np.unique(selected[1:]) # we take all but the last to be our clusters
+#
+#        return torch.Tensor([selected]), clusters
 
     def select_layer_wise(self, distances, distance_allowed, percentage):
         distances = distances.detach().cpu().numpy()

@@ -14,6 +14,9 @@ class Converter():
         print('INCREASING POW LEVEL')
         self.pow_2_level += 1
 
+    def reset(self):
+        self.pow_2_level = 0
+
     def convert_to_pows_of_2(self, weights, first = False):
          import math
          c = copy.deepcopy(weights.detach()).type_as(weights)
