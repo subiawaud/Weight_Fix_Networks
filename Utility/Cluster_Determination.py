@@ -116,7 +116,7 @@ class Cluster_Determination():
     def get_the_clusters(self, percent, a):
         weights = self.flattener.flatten_network_tensor().detach().cpu()
         #is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
-        is_fixed = torch.zeros_like(weights).bool()
+        is_fixed = torch.zeros_like(weights).bool().detach()
         taken = 0
         ap2 = 0
         to_take = int(len(weights)*percent)
@@ -139,7 +139,7 @@ class Cluster_Determination():
                print('increasing')
                ap2 += 1
         clusters = torch.unique(torch.Tensor(clusters)).type_as(weights)
-        self.is_fixed = is_fixed
+        self.is_fixed = ~is_fixed
         return clusters.unsqueeze(0), is_fixed, distances, new_weight_set
 
     def select_layer_wise(self, distances, distance_allowed, percentage):
@@ -181,8 +181,7 @@ class Cluster_Determination():
 
     def grab_only_those_not_fixed(self):
         flattened_model_weights = self.flattener.flatten_network_tensor()
-        flatten_is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
-        return flattened_model_weights[~flatten_is_fixed]
+        return flattened_model_weights[self.is_fixed]
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
         if is_fixed is None and only_not_fixed:
