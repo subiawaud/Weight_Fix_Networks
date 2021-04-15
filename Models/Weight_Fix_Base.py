@@ -181,12 +181,11 @@ class Weight_Fix_Base(pl.LightningModule):
     def flatten_is_fixed(self):
         return self.flattener.flatten_standard(self.is_fixed)
 
-    def determine_which_weights_are_newly_fixed(self, idx, flattened_network):
+    def determine_which_weights_are_newly_fixed(self, fixed, flattened_network):
         currently_fixed_indicies = np.argwhere(flattened_network.cpu())
-        new_fixed = np.setdiff1d(idx, currently_fixed_indicies)
+        new_fixed = np.setdiff1d(np.argwhere(fixed), currently_fixed_indicies)
 #        new_fixed = np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
         print('currently fixed indicies', currently_fixed_indicies)
-        print('indexes', idx)
         print('newly fixed indexes', new_fixed)
         return new_fixed
 
@@ -244,12 +243,17 @@ class Weight_Fix_Base(pl.LightningModule):
             quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
         #centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
         centroids, is_fixed, closest_cluster_distance, clustered_weights = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
-        newly_fixed = self.determine_which_weights_are_newly_fixed(torch.where(is_fixed), self.flattener.flatten_standard(self.is_fixed))
+        print('centroids chosen', centroids)
+        print('is fixed chosen', torch.sum(is_fixed))
+        print(is_fixed.size(), closest_cluster_distance, clustered_weights)
+        print(self.flattener.flatten_standard(self.is_fixed).size())
+        self.centroid_to_regularise_to = centroids.detach()
+        newly_fixed = self.determine_which_weights_are_newly_fixed(is_fixed, self.flattener.flatten_standard(self.is_fixed))
         threshold_val = self.calculate_threshold_value(closest_cluster_distance[newly_fixed])
         print('threshold val is', self.calculate_allowable_distance())
         print('current val  ', threshold_val)
         self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration)
-        self.assign_weights_to_clusters(clusted_weights, is_fixed)
+        self.assign_weights_to_clusters(clustered_weights.detach(), is_fixed.detach())
         self.reset_cluster_nums()
 
     def reset_cluster_nums(self):
