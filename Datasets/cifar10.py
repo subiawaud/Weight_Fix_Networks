@@ -44,6 +44,11 @@ class CIFAR10DataModule(pl.LightningDataModule):
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         self.normalise])
+        def test_transform(self):
+                        return transforms.Compose([
+                        transforms.ToTensor(),
+                        self.normalise])
+
 
 
         def permute_pixels(self, x):
@@ -61,7 +66,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
                         self.train, self.val = random_split(cifar_full, [45000, 5000])
 
                 if stage == 'test' or stage is None:
-                        self.test = CIFAR10(self.data_dir, train = False, transform=self.transform, target_transform=self.target_transform)
+                        self.test = CIFAR10(self.data_dir, train = False, transform=self.test_transform(), target_transform=self.target_transform)
 
         def train_dataloader(self):
                 return DataLoader(self.train, batch_size=self.bs, num_workers = 6)
