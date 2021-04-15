@@ -16,7 +16,8 @@ class Distance_Calculation():
             if not requires_grad:
                 distance_matrix[:, i] = torch.abs(weights - centers[0, i]).detach()
             else:
-                distance_matrix[:, i] = torch.abs(weights - centers[0, i])
+                distance_matrix[:, i] = torch.abs(weights - centers[0, i].detach())
+
 
 #            distance = torch.abs(weights - centers[0, i])
 #            if not requires_grad:

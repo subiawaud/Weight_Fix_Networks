@@ -155,7 +155,7 @@ class Weight_Fix_Base(pl.LightningModule):
         y_hat = self(x)
         ce = F.cross_entropy(y_hat, y)
         cluster_error = self.calculate_cluster_error(ce)
-        loss = ce + cluster_error
+        loss = cluster_error + ce
         acc = self.taccuracy(F.softmax(y_hat, dim=1), y)
         self.log('train_loss',loss, prog_bar=False, logger = False, sync_dist=True, on_epoch=True)
         return loss
@@ -232,6 +232,7 @@ class Weight_Fix_Base(pl.LightningModule):
             self.fixed_weights[i] = clustered_weights[start:count].reshape(s).to(self.device)
             fixed += torch.sum(self.is_fixed[i])
 
+
     def print_unique_params(self):
         return self.parameter_iterator.iteratate_all_parameters_and_apply(self.metric_logger.print_the_number_of_unique_params)
 
@@ -239,8 +240,8 @@ class Weight_Fix_Base(pl.LightningModule):
         weights = self.flattener.flatten_network_tensor()
         percentage = self.percentage_fixed
         number_fixed = self.calculate_how_many_to_fix(weights, percentage)
-        if quantised_weights is None:
-            quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
+       # if quantised_weights is None:
+       #     quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
         #centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
         centroids, is_fixed, closest_cluster_distance, clustered_weights = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
         print('centroids chosen', centroids)
@@ -254,7 +255,7 @@ class Weight_Fix_Base(pl.LightningModule):
         print('current val  ', threshold_val)
         self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration)
         self.assign_weights_to_clusters(clustered_weights.detach(), is_fixed.detach())
-        self.reset_cluster_nums()
+    #    self.reset_cluster_nums()
 
     def reset_cluster_nums(self):
         self.number_of_clusters = 3

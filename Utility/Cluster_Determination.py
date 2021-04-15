@@ -108,6 +108,7 @@ class Cluster_Determination():
         sorted_indexes = np.argsort(local_cluster_distances) #sort them by index
 #        rolling_mean = np.cumsum(local_cluster_distances[sorted_indexes]) / np.arange(1, len(sorted_indexes)+1)
         first_larger = np.argmax(local_cluster_distances[sorted_indexes]  >= max_dist)  # which is the first distance larger than the max_dist
+        print('distances', local_cluster_distances[sorted_indexes])
         if first_larger > to_cluster or (first_larger == 0 and local_cluster_distances[-1] <= max_dist):
             return sorted_indexes[:to_cluster], vals[am], local_cluster_distances[sorted_indexes[:to_cluster]]
         else:
@@ -121,7 +122,6 @@ class Cluster_Determination():
         ap2 = 0
         to_take = int(len(weights)*percent)
         clusters = []
-        new_weight_set = torch.zeros_like(weights).type_as(weights)
         distances = torch.zeros_like(weights).type_as(weights)
         while(taken < to_take):
            vals = self.create_possible_centroids(torch.max(weights[~is_fixed]), torch.min(weights[~is_fixed]), a, ap2).type_as(weights)
@@ -130,7 +130,7 @@ class Cluster_Determination():
            parent_idx = np.arange(weights.size()[0])[~is_fixed.squeeze()][indicies]
            print(parent_idx, 'taking')
            print(dist)
-           new_weight_set[parent_idx] = cluster
+           weights[parent_idx] = cluster
            distances[parent_idx] = dist#.unsqueeze(1)
            taken += len(indicies)
            clusters.append(cluster)
@@ -139,8 +139,8 @@ class Cluster_Determination():
                print('increasing')
                ap2 += 1
         clusters = torch.unique(torch.Tensor(clusters)).type_as(weights)
-        self.is_fixed = ~is_fixed
-        return clusters.unsqueeze(0), is_fixed, distances, new_weight_set
+        self.is_fixed = is_fixed
+        return clusters.unsqueeze(0), is_fixed, distances, weights
 
     def select_layer_wise(self, distances, distance_allowed, percentage):
         distances = distances.detach().cpu().numpy()
@@ -181,7 +181,7 @@ class Cluster_Determination():
 
     def grab_only_those_not_fixed(self):
         flattened_model_weights = self.flattener.flatten_network_tensor()
-        return flattened_model_weights[self.is_fixed]
+        return flattened_model_weights[~self.is_fixed]
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
         if is_fixed is None and only_not_fixed:
@@ -191,6 +191,7 @@ class Cluster_Determination():
         distances = torch.zeros(is_fixed.size()[0], cluster_centers.size()[1]).type_as(is_fixed)
         distances = self.distance_calculator.distance_calc(is_fixed, cluster_centers, distances, requires_grad)
         return distances, is_fixed
+
 
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
