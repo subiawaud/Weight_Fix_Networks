@@ -55,7 +55,8 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
           epochs = rest_epochs + i*epoch_increment
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
-        trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        #trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
         trainer.fit(model, data)
         if x == percentages[0]:
             orig_acc = trainer.test(model)[0]['test_acc_epoch']
@@ -95,19 +96,24 @@ def get_model(model, data):
         use_sched = False
         lr = 3e-4
         model = model.load_from_checkpoint(checkpoint_path="PyTorch_CIFAR10/cifar10_models/state_dicts/all_conv4")
+        model.name = 'conv4'
         return lr, use_sched, model, 'ADAM'
     if model == 'resnet' and data == 'cifar10':
         lr = 0.00002
-        return lr, use_sched, resnet18(pretrained = True), 'ADAM'
+        m = resnet18(pretrained=True)
+        m.name = model
+        return lr, use_sched, m, 'ADAM'
     if model == 'resnet' and data == 'imnet':
         lr = 0.01
         model = models.resnet18(pretrained=False)
-        model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
         model.name = 'resnet18'
+        model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
         return lr, use_sched, model, 'SGD'
     if model == 'mobilenet':
         lr = 0.00002
-        return lr, use_sched, mobilenet_v2(pretrained = True), 'ADAM'
+        m = mobilenet_v2(pretrained=True)
+        m.name = model
+        return lr, use_sched, m, 'ADAM'
 
 def determine_dataset(data_arg):
     if data_arg == 'cifar10':
