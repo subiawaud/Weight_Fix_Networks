@@ -17,7 +17,6 @@ class Cluster_Determination():
         self.distance_type = distance_type
         self.layer_shapes = layer_shapes
         self.device = device
-        torch.set_printoptions(precision=10)
 
     def convert_to_pows_of_2(self, weights, p2l, first = False):
          import math
@@ -191,7 +190,7 @@ class Cluster_Determination():
                    a *= 2
            else:
                 a = dist_allowed
-        clusters = torch.unique(torch.Tensor(clusters)).type_as(weights)
+        clusters = torch.unique(torch.Tensor(clusters)).type_as(weights).detach()
         self.is_fixed = is_fixed
         return clusters.unsqueeze(0), is_fixed, distances, weights
 
@@ -240,8 +239,8 @@ class Cluster_Determination():
         if is_fixed is None and only_not_fixed:
             is_fixed = self.grab_only_those_not_fixed()
         elif is_fixed is None:
-            is_fixed = self.flattener.flatten_network_tensor()
-        distances = torch.zeros(is_fixed.size()[0], cluster_centers.size()[1]).type_as(is_fixed)
+            is_fixed = self.flattener.flatten_network_tensor().detach()
+        distances = torch.zeros(is_fixed.size()[0], cluster_centers.size()[1])
         distances = self.distance_calculator.distance_calc(is_fixed, cluster_centers, distances, requires_grad)
         return distances, is_fixed
 
