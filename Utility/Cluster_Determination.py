@@ -11,21 +11,23 @@ class Cluster_Determination():
         self.distance_calculator = distance_calculator
         self.model = model
         self.flattener = flattener
-        self.is_fixed = is_fixed
+        self.is_fixed_flat = self.flattener.flatten_standard(is_fixed).detach()
         self.zero_distance = zero_distance
         self.weighting_function = self.determine_weighting(distance_type)
         self.distance_type = distance_type
         self.layer_shapes = layer_shapes
         self.device = device
+        self.not_fixed = torch.where(~self.is_fixed_flat)[0].to(self.device)
+
 
     def convert_to_pows_of_2(self, weights, p2l, first = False):
          import math
          c = copy.deepcopy(weights.detach()).type_as(weights)
          if first:
              c[torch.abs(c) < self.zero_distance] = 0 # set small values to be zero
-         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([np.log2(self.zero_distance) - p2l + 1]).type_as(weights), torch.round(torch.log2(c[c>0]))))
+         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([np.log2(self.zero_distance) - p2l - 1]).type_as(weights), torch.round(torch.log2(c[c>0]))))
          a = torch.log2(torch.abs(c[c < 0]).type_as(weights))
-         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([np.log2(self.zero_distance) - p2l + 1]).type_as(weights), torch.round(a)))
+         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([np.log2(self.zero_distance) - p2l - 1]).type_as(weights), torch.round(a)))
          return c
 
     def convert_to_add_pows_of_2(self, weights, distance, p2l):
@@ -35,7 +37,7 @@ class Cluster_Determination():
             next = torch.zeros(len(weights)).type_as(weights)
             diff_pow_2 = self.convert_to_pows_of_2(diff, p2l)
             diff_dist = torch.abs(distance *  weights)
-            to_change = torch.abs(diff) > diff_dist
+            to_change = torch.abs(diff) >= diff_dist
             to_change = torch.logical_and(to_change, current !=0)
             next[to_change] = diff_pow_2[to_change]
             current = next + current
@@ -59,7 +61,7 @@ class Cluster_Determination():
     def closest_cluster(self,weights,  clusters, iteration):
         print('calling closest cluster', clusters, clusters.size())
         flattened_weights = self.flattener.flatten_network_tensor()
-        flatten_is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
+        flatten_is_fixed = self.is_fixed_flat
         distances = torch.ones(flattened_weights.size()[0], clusters.size()[1]).to('cuda') # create a zero matrix for each of the distances to clusters
         distances = self.set_the_distances_of_already_fixed(flattened_weights, flatten_is_fixed, clusters, distances)
         newly_fixed_distances = self.distance_calculator.distance_calc(flattened_weights[~flatten_is_fixed], clusters, distances[~flatten_is_fixed], requires_grad = False)
@@ -90,11 +92,11 @@ class Cluster_Determination():
            i = 1
            while(ma < boundary):
                  vals[i] = ma
-
                  ma = self.get_clusters(ma, a)
                  i += 1
+           print('vals before', vals[:40])
            pw = torch.unique(self.convert_to_add_pows_of_2(torch.Tensor(vals),a, powl))
-           print(pw.size())
+           print('vals after', pw[:40])
            return torch.unique(torch.cat([torch.flip(-pw, [0]), pw]))
 
 
@@ -102,36 +104,39 @@ class Cluster_Determination():
         #fixed_but_not_fixed = torch.logical_and(already_fixed, ~is_fixed)
         print('weight values', weights)
 
-        distances = torch.abs(weights[~is_fixed] - vals.unsqueeze(1)) / (torch.abs(weights[~is_fixed])) # take the distances between weights and vals
+        distances = torch.abs(weights[self.not_fixed] - vals.unsqueeze(1))  # take the distances between weights and vals
         #if there is still an issue, it will be related to the assignment of closest and not that distance between (me thinks)
         print('vals at start', vals)
         print('distances at the start', distances[:,0])
-        print('dbz1', distances[distances != distances])
-        distances[distances != distances] = 1 # here we overcome the divide by zero issue
-        print('dbz2', distances[distances != distances])
-        if zero_index:
-            distances[zero_index,(torch.abs(weights[~is_fixed]) < self.zero_distance*0.51).squeeze()] = 0
-        print('dist of zero index', distances[zero_index])
+
         print('min dists', distances.min(0))
         print('min selected  =', distances.argmin(0))
         u, c = torch.unique(distances.argmin(0), return_counts = True)
         print('uc', u,c)
+        print('argmax c', torch.argmax(c))
         am = u[torch.argmax(c)] # which cluster has the most local weights
+
+
+        distances /=  (torch.abs(weights[self.not_fixed]))
+        print('dbz1', distances[distances != distances])
+        distances[distances != distances] = 1 # here we overcome the divide by zero issue
+        print('dbz2', distances[distances != distances])
+        if zero_index:
+            distances[zero_index,(torch.abs(weights[self.not_fixed]) < self.zero_distance).squeeze()] = 0
+        print('dist of zero index', distances[zero_index])
+        print('dist after normalisation', distances[:,0])
+
         print('cluster selected =', am, vals[am])
         local_cluster_distances = distances[am, :]
         print('local cluster distances =', local_cluster_distances)
         sorted_indexes = np.argsort(local_cluster_distances) #sort them by index
-        print('weights at local dists', weights[~is_fixed][sorted_indexes])
+        print('weights at local dists', weights[self.not_fixed][sorted_indexes])
         print('sorted local cluster distances', local_cluster_distances[sorted_indexes])
         if torch.sum((local_cluster_distances[sorted_indexes] <= 0.00)) > 1:
             first_larger_than_zero = min(np.max(np.where(local_cluster_distances[sorted_indexes]  <=  0.00)[0])+1, len(sorted_indexes))  # which is the first distance > 0
         else:
             print('none <= 0')
             first_larger_than_zero = 0
-
-        #    print('in except')
-        #    first_larger_than_zero = 0
-            #(since those = to
         print('fltz', first_larger_than_zero)
 
         #zero will be from previous  assignments usually )
@@ -159,7 +164,9 @@ class Cluster_Determination():
             return sorted_indexes[:first_larger], vals[am], local_cluster_distances[sorted_indexes[:first_larger]]
     
     def get_the_clusters(self, percent, dist_allowed):
-        weights = self.flattener.flatten_network_tensor().detach().cpu()
+        weights = self.flattener.flatten_network_tensor()
+        dev = weights.device
+        weights = weights.detach().cpu()
         #is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
         is_fixed = torch.zeros_like(weights).bool().detach()
         taken = 0
@@ -186,13 +193,20 @@ class Cluster_Determination():
            if len(indicies) == 0:
                print('increasing ap2', ap2)
                ap2 += 1
-               if ap2 > 6:
+               if ap2 > 10:
                    a *= 2
            else:
                 a = dist_allowed
+<<<<<<< HEAD
         clusters = torch.unique(torch.Tensor(clusters)).type_as(weights).detach()
         self.is_fixed = is_fixed
         return clusters.unsqueeze(0), is_fixed, distances, weights
+=======
+        clusters = torch.unique(torch.Tensor(clusters))
+        self.is_fixed_flat = is_fixed.to(self.device)
+        self.not_fixed = torch.where(~self.is_fixed_flat)[0].to(dev)
+        return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights
+>>>>>>> e5e5bbc2fcd9d1b8712e644579e3a4bf054adadb
 
     def select_layer_wise(self, distances, distance_allowed, percentage):
         distances = distances.detach().cpu().numpy()
@@ -227,15 +241,18 @@ class Cluster_Determination():
 
     def relative_weighting(self, weighting, distance, weights):
         weighted = self.standard_weighting(weighting, distance)
-        larger = torch.abs(weighted) > self.zero_distance
+        larger = torch.abs(weights) > self.zero_distance
         weighted[larger] = torch.div(weighted[larger], torch.abs(weights[larger]))
         return weighted
 
+
     def grab_only_those_not_fixed(self):
         flattened_model_weights = self.flattener.flatten_network_tensor()
-        return flattened_model_weights[~self.is_fixed]
+        return torch.index_select(flattened_model_weights,0, self.not_fixed)
+
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
+<<<<<<< HEAD
         if is_fixed is None and only_not_fixed:
             is_fixed = self.grab_only_those_not_fixed()
         elif is_fixed is None:
@@ -243,6 +260,15 @@ class Cluster_Determination():
         distances = torch.zeros(is_fixed.size()[0], cluster_centers.size()[1])
         distances = self.distance_calculator.distance_calc(is_fixed, cluster_centers, distances, requires_grad)
         return distances, is_fixed
+=======
+     #   if is_fixed is None and only_not_fixed:
+        weights_not_fixed = self.grab_only_those_not_fixed()
+       # elif is_fixed is None:
+        #    is_fixed = self.flattener.flatten_network_tensor()
+        distances = torch.zeros(weights_not_fixed.size()[0], cluster_centers.size()[1], device=weights_not_fixed.device)
+        distances = self.distance_calculator.distance_calc(weights_not_fixed, cluster_centers, distances, requires_grad)
+        return distances, weights_not_fixed
+>>>>>>> e5e5bbc2fcd9d1b8712e644579e3a4bf054adadb
 
 
 
