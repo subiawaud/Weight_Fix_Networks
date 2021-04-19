@@ -104,7 +104,7 @@ class Cluster_Determination():
         #fixed_but_not_fixed = torch.logical_and(already_fixed, ~is_fixed)
         print('weight values', weights)
 
-        distances = torch.abs(weights[self.not_fixed] - vals.unsqueeze(1))  # take the distances between weights and vals
+        distances = torch.abs(weights[~is_fixed] - vals.unsqueeze(1))  # take the distances between weights and vals
         #if there is still an issue, it will be related to the assignment of closest and not that distance between (me thinks)
         print('vals at start', vals)
         print('distances at the start', distances[:,0])
@@ -117,12 +117,12 @@ class Cluster_Determination():
         am = u[torch.argmax(c)] # which cluster has the most local weights
 
 
-        distances /=  (torch.abs(weights[self.not_fixed]))
+        distances /=  (torch.abs(weights[~is_fixed]))
         print('dbz1', distances[distances != distances])
         distances[distances != distances] = 1 # here we overcome the divide by zero issue
         print('dbz2', distances[distances != distances])
         if zero_index:
-            distances[zero_index,(torch.abs(weights[self.not_fixed]) < self.zero_distance).squeeze()] = 0
+            distances[zero_index,(torch.abs(weights[~is_fixed]) < self.zero_distance).squeeze()] = 0
         print('dist of zero index', distances[zero_index])
         print('dist after normalisation', distances[:,0])
 
@@ -130,7 +130,7 @@ class Cluster_Determination():
         local_cluster_distances = distances[am, :]
         print('local cluster distances =', local_cluster_distances)
         sorted_indexes = np.argsort(local_cluster_distances) #sort them by index
-        print('weights at local dists', weights[self.not_fixed][sorted_indexes])
+        print('weights at local dists', weights[~is_fixed][sorted_indexes])
         print('sorted local cluster distances', local_cluster_distances[sorted_indexes])
         if torch.sum((local_cluster_distances[sorted_indexes] <= 0.00)) > 1:
             first_larger_than_zero = min(np.max(np.where(local_cluster_distances[sorted_indexes]  <=  0.00)[0])+1, len(sorted_indexes))  # which is the first distance > 0
