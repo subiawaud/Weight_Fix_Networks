@@ -81,7 +81,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 )
     model.set_loggers(logger, outer_logger)
     model.reset_optim(epochs)
-    trainer = pl.Trainer(gpus=-1,nb_gpu_nodes = -1,  accelerator='ddp', max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
+    trainer = pl.Trainer(gpus=-1, max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
     trainer.fit(model, data)
     trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
     model.print_unique_params()
@@ -134,7 +134,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.02]) #0.1, 0.15, 0.2, 0.25, 0.3
+    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.1]) #0.1, 0.15, 0.2, 0.25, 0.3
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
     parser.add_argument('--first_epoch', type=int, default =0)
     parser.add_argument('--fixing_epochs', type=int, default = 1)
@@ -142,11 +142,11 @@ if __name__ == "__main__":
     parser.add_argument('--cluster_bit_fix', default = 'pow_2_add')
     parser.add_argument('--name', default = "testing_relative")
     parser.add_argument('--distance_calculation_type', default = "relative")
-    parser.add_argument('--regularistion_ratio', default = 0.05, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
+    parser.add_argument('--regularistion_ratio', default = 0.1, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
     parser.add_argument('--model', default = 'resnet')
     parser.add_argument('--non_regd', default = 0, type=float)
     parser.add_argument('--dataset', default = 'cifar10')
-    parser.add_argument('--zero_distance', default = 2**-8, type=float)
+    parser.add_argument('--zero_distance', default = 2**-11, type=float)
     parser.add_argument('--bn_inc', default=0.0, type=float)
     parser.add_argument('--resume',default=0.0, type=float)
     args = parser.parse_args()

@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import copy
 
+
 class Cluster_Determination():
     def __init__(self, distance_calculator, model, is_fixed, distance_type, layer_shapes, flattener, zero_distance, device):
         self.distance_calculator = distance_calculator
@@ -16,15 +17,16 @@ class Cluster_Determination():
         self.distance_type = distance_type
         self.layer_shapes = layer_shapes
         self.device = device
+        torch.set_printoptions(precision=10)
 
     def convert_to_pows_of_2(self, weights, p2l, first = False):
          import math
          c = copy.deepcopy(weights.detach()).type_as(weights)
          if first:
              c[torch.abs(c) < self.zero_distance] = 0 # set small values to be zero
-         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([-7 - p2l]).type_as(weights), torch.round(torch.log2(c[c>0]))))
+         c[c > 0] = torch.pow(2, torch.max(torch.Tensor([np.log2(self.zero_distance) - p2l + 1]).type_as(weights), torch.round(torch.log2(c[c>0]))))
          a = torch.log2(torch.abs(c[c < 0]).type_as(weights))
-         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([-7 - p2l]).type_as(weights), torch.round(a)))
+         c[c < 0] = -torch.pow(2, torch.max(torch.Tensor([np.log2(self.zero_distance) - p2l + 1]).type_as(weights), torch.round(a)))
          return c
 
     def convert_to_add_pows_of_2(self, weights, distance, p2l):
@@ -75,46 +77,89 @@ class Cluster_Determination():
         return closest_cluster, closest_cluster_index
 
     def get_clusters(self, mi, d):
-        if mi < 0:
-            ma = (d*mi + mi)*(1 - d) 
-        else:
-            ma = (d*mi + mi)/(1 - d)
+        ma = (mi)/(1 - d) # if we use the mean dist
+         #   ma = mi/(1-d) # max dist use
         return ma 
 
 
 
     def create_possible_centroids(self, max_weight, min_weight, a, powl):
-           vals = np.zeros(10000)
-           ma = min_weight 
-           i = 0 
-           while(ma < max_weight):
+           vals = np.zeros(100000)
+           boundary = max(abs(min_weight), max_weight)
+           ma = self.zero_distance
+           vals[0] = 0
+           i = 1
+           while(ma < boundary):
                  vals[i] = ma
-                 if abs(ma) < self.zero_distance:
-                      ma = 0
-                 if ma == 0:
-                      ma = self.zero_distance
-                 else:
-                      ma = self.get_clusters(ma, a)
+
+                 ma = self.get_clusters(ma, a)
                  i += 1
-           return torch.unique(self.convert_to_add_pows_of_2(torch.Tensor(vals),a, powl)) 
+           pw = torch.unique(self.convert_to_add_pows_of_2(torch.Tensor(vals),a, powl))
+           print(pw.size())
+           return torch.unique(torch.cat([torch.flip(-pw, [0]), pw]))
+
 
     def find_the_next_cluster(self, weights, is_fixed, vals, zero_index,  max_dist, to_cluster):
-        distances = (torch.abs(weights[~is_fixed] - vals.unsqueeze(1) ) / (torch.abs(weights[~is_fixed])+1e-7)) # take the distances between weights and vals
+        #fixed_but_not_fixed = torch.logical_and(already_fixed, ~is_fixed)
+        print('weight values', weights)
+
+        distances = torch.abs(weights[~is_fixed] - vals.unsqueeze(1)) / (torch.abs(weights[~is_fixed])) # take the distances between weights and vals
+        #if there is still an issue, it will be related to the assignment of closest and not that distance between (me thinks)
+        print('vals at start', vals)
+        print('distances at the start', distances[:,0])
+        print('dbz1', distances[distances != distances])
+        distances[distances != distances] = 1 # here we overcome the divide by zero issue
+        print('dbz2', distances[distances != distances])
         if zero_index:
-            distances[zero_index,(torch.abs(weights[~is_fixed] )<self.zero_distance).squeeze()] = 0 
+            distances[zero_index,(torch.abs(weights[~is_fixed]) < self.zero_distance*0.51).squeeze()] = 0
+        print('dist of zero index', distances[zero_index])
+        print('min dists', distances.min(0))
+        print('min selected  =', distances.argmin(0))
         u, c = torch.unique(distances.argmin(0), return_counts = True)
-        am = u[torch.argmax(c)] # which cluster has the most local weights   
+        print('uc', u,c)
+        am = u[torch.argmax(c)] # which cluster has the most local weights
+        print('cluster selected =', am, vals[am])
         local_cluster_distances = distances[am, :]
+        print('local cluster distances =', local_cluster_distances)
         sorted_indexes = np.argsort(local_cluster_distances) #sort them by index
-#        rolling_mean = np.cumsum(local_cluster_distances[sorted_indexes]) / np.arange(1, len(sorted_indexes)+1)
-        first_larger = np.argmax(local_cluster_distances[sorted_indexes]  >= max_dist)  # which is the first distance larger than the max_dist
-        print('distances', local_cluster_distances[sorted_indexes])
+        print('weights at local dists', weights[~is_fixed][sorted_indexes])
+        print('sorted local cluster distances', local_cluster_distances[sorted_indexes])
+        if torch.sum((local_cluster_distances[sorted_indexes] <= 0.00)) > 1:
+            first_larger_than_zero = min(np.max(np.where(local_cluster_distances[sorted_indexes]  <=  0.00)[0])+1, len(sorted_indexes))  # which is the first distance > 0
+        else:
+            print('none <= 0')
+            first_larger_than_zero = 0
+
+        #    print('in except')
+        #    first_larger_than_zero = 0
+            #(since those = to
+        print('fltz', first_larger_than_zero)
+
+        #zero will be from previous  assignments usually )
+
+        divide_by = np.ones(len(sorted_indexes))
+        divide_by[first_larger_than_zero:] = np.arange(1, len(sorted_indexes) - first_larger_than_zero + 1)
+
+        rolling_mean = np.cumsum(local_cluster_distances[sorted_indexes]) / divide_by
+        print('rm', rolling_mean)
+        try:
+            print('rolling < max dist', np.where(rolling_mean <= max_dist))
+            print('rolling < max dist 2', np.where(rolling_mean <= max_dist)[0])
+            first_larger = np.max(np.where(rolling_mean <= max_dist)[0]) + 1
+        except Exception as e:
+            print('in except', e)
+            first_larger = 0
+
+
         if first_larger > to_cluster or (first_larger == 0 and local_cluster_distances[-1] <= max_dist):
+            print(1, first_larger > to_cluster)
+            print(2, (first_larger == 0 and local_cluster_distances[-1] <= max_dist))
             return sorted_indexes[:to_cluster], vals[am], local_cluster_distances[sorted_indexes[:to_cluster]]
         else:
+            print(3)
             return sorted_indexes[:first_larger], vals[am], local_cluster_distances[sorted_indexes[:first_larger]]
     
-    def get_the_clusters(self, percent, a):
+    def get_the_clusters(self, percent, dist_allowed):
         weights = self.flattener.flatten_network_tensor().detach().cpu()
         #is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
         is_fixed = torch.zeros_like(weights).bool().detach()
@@ -123,21 +168,29 @@ class Cluster_Determination():
         to_take = int(len(weights)*percent)
         clusters = []
         distances = torch.zeros_like(weights).type_as(weights)
+        a = dist_allowed #we separate this in order to allow distance allowed to grow but not the cluster distribution
         while(taken < to_take):
-           vals = self.create_possible_centroids(torch.max(weights[~is_fixed]), torch.min(weights[~is_fixed]), a, ap2).type_as(weights)
+           vals = self.create_possible_centroids(torch.max(weights[~is_fixed]), torch.min(weights[~is_fixed]), dist_allowed, ap2).type_as(weights)
+           print('these are the values', vals)
+           print('i am a', a)
+           print('i am the distance allowed', dist_allowed)
            needed = to_take - taken
-           indicies, cluster, dist  = self.find_the_next_cluster(weights, is_fixed, vals, torch.where(vals==0), max_dist=a, to_cluster = needed)
+           indicies, cluster, dist  = self.find_the_next_cluster(weights, is_fixed, vals, torch.where(vals==0), a, needed)
            parent_idx = np.arange(weights.size()[0])[~is_fixed.squeeze()][indicies]
-           print(parent_idx, 'taking')
-           print(dist)
+           print('the weights clustered =', weights[parent_idx])
            weights[parent_idx] = cluster
            distances[parent_idx] = dist#.unsqueeze(1)
            taken += len(indicies)
            clusters.append(cluster)
            is_fixed[parent_idx] = True
+           print('taking', len(indicies))
            if len(indicies) == 0:
-               print('increasing')
+               print('increasing ap2', ap2)
                ap2 += 1
+               if ap2 > 6:
+                   a *= 2
+           else:
+                a = dist_allowed
         clusters = torch.unique(torch.Tensor(clusters)).type_as(weights)
         self.is_fixed = is_fixed
         return clusters.unsqueeze(0), is_fixed, distances, weights
