@@ -23,7 +23,7 @@ class ImageNet_Module(pl.LightningDataModule):
                 self.target_transform = self.target_transform_select(shuffle_labels)
                 self.targets = 1000
                 self.dims = (3,224,224)
-                self.bs = 128
+                self.bs = 256
 #                torch.distributed.init_process_group('nccl')
                 self.name = 'ImageNet'
 

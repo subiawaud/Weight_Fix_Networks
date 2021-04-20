@@ -89,7 +89,7 @@ class Cluster_Determination():
            boundary = max(abs(min_weight), max_weight)
            ma = self.zero_distance
            vals[0] = 0
-           i = 1
+           i = 0
            while(ma < boundary):
                  vals[i] = ma
                  ma = self.get_clusters(ma, a)
@@ -197,16 +197,10 @@ class Cluster_Determination():
                    a *= 2
            else:
                 a = dist_allowed
-<<<<<<< HEAD
-        clusters = torch.unique(torch.Tensor(clusters)).type_as(weights).detach()
-        self.is_fixed = is_fixed
-        return clusters.unsqueeze(0), is_fixed, distances, weights
-=======
         clusters = torch.unique(torch.Tensor(clusters))
         self.is_fixed_flat = is_fixed.to(self.device)
         self.not_fixed = torch.where(~self.is_fixed_flat)[0].to(dev)
         return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights
->>>>>>> e5e5bbc2fcd9d1b8712e644579e3a4bf054adadb
 
     def select_layer_wise(self, distances, distance_allowed, percentage):
         distances = distances.detach().cpu().numpy()
@@ -252,15 +246,6 @@ class Cluster_Determination():
 
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
-<<<<<<< HEAD
-        if is_fixed is None and only_not_fixed:
-            is_fixed = self.grab_only_those_not_fixed()
-        elif is_fixed is None:
-            is_fixed = self.flattener.flatten_network_tensor().detach()
-        distances = torch.zeros(is_fixed.size()[0], cluster_centers.size()[1])
-        distances = self.distance_calculator.distance_calc(is_fixed, cluster_centers, distances, requires_grad)
-        return distances, is_fixed
-=======
      #   if is_fixed is None and only_not_fixed:
         weights_not_fixed = self.grab_only_those_not_fixed()
        # elif is_fixed is None:
@@ -268,7 +253,6 @@ class Cluster_Determination():
         distances = torch.zeros(weights_not_fixed.size()[0], cluster_centers.size()[1], device=weights_not_fixed.device)
         distances = self.distance_calculator.distance_calc(weights_not_fixed, cluster_centers, distances, requires_grad)
         return distances, weights_not_fixed
->>>>>>> e5e5bbc2fcd9d1b8712e644579e3a4bf054adadb
 
 
 
