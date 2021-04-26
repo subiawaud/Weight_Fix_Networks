@@ -274,7 +274,7 @@ class Weight_Fix_Base(pl.LightningModule):
         for n, pp in self.named_modules():
           if isinstance(pp, self.layers_fixed):
               for n, v in pp.named_parameters():
-                 v.grad.data[torch.where(self.is_fixed[i])] = torch.zeros_like(v.grad.data[torch.where(self.is_fixed[i])])
+                 v.grad.data[self.is_fixed[i]] = torch.zeros_like(v.grad.data[self.is_fixed[i]])
                  if self.current_epoch == self.max_epochs-1:
                      self.update_gradient_data_tracker(i, v.grad)
                  i += 1

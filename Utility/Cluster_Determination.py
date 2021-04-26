@@ -202,32 +202,6 @@ class Cluster_Determination():
         self.not_fixed = torch.where(~self.is_fixed_flat)[0].to(dev)
         return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights
 
-    def select_layer_wise(self, distances, distance_allowed, percentage):
-        distances = distances.detach().cpu().numpy()
-        indices = []
-        count = 0
-        for i, s in enumerate(self.layer_shapes):
-            start = count
-            count += int(np.prod(s))
-            layer_distances = np.nan_to_num(distances[start:count])
-            possible_choices = (layer_distances) - distance_allowed < 0
-            number_fixed = int(round(percentage*(count-start)))
-            if number_fixed < (count - start):
-                if np.sum(possible_choices) > number_fixed:
-                    indices.extend(np.argpartition(layer_distances, number_fixed)[:number_fixed] + start)
-                else:
-                    indices.extend(np.argpartition(layer_distances, number_fixed)[:number_fixed] + start)
-            else:
-                indices.extend(list(range(start, count)))
-        return np.array(indices)
-
-    def select_not_layer_wise(self, distances, distance_allowed, percentage):
-        distances = distances.detach().cpu().numpy()
-        number = int(len(distances)*percentage)
-        smallest_idx = np.argpartition(distances, number)[:number]
-        print('distances in select', distances[smallest_idx])
-        print('smallest' , smallest_idx)
-        return smallest_idx
         
 
     def standard_weighting(self, weighting, distance):
@@ -235,8 +209,8 @@ class Cluster_Determination():
 
     def relative_weighting(self, weighting, distance, weights):
         weighted = self.standard_weighting(weighting, distance)
-        larger = torch.abs(weights) > self.zero_distance
-        weighted[larger] = torch.div(weighted[larger], torch.abs(weights[larger]))
+        weighted = torch.div(weighted, torch.abs(weights))
+        weighted = torch.where(torch.abs(weights) > self.zero_distance, weights, torch.zeros_like(weights, device=weighted.device))
         return weighted
 
 
