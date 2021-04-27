@@ -134,8 +134,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.025]) #0.1, 0.15, 0.2, 0.25, 0.3
-    parser.add_argument('--percentages', nargs='+', type=float, default = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
+    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
+    parser.add_argument('--percentages', nargs='+', type=float, default = [0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
     parser.add_argument('--first_epoch', type=int, default =0)
     parser.add_argument('--fixing_epochs', type=int, default = 3)
     parser.add_argument('--epoch_increment', type=int, default = 0)
