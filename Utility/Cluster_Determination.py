@@ -228,7 +228,6 @@ class Cluster_Determination():
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
         distances, is_fixed = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
-        print(distances)
         e = 1e-12
         cluster_weight_assignment = F.softmin(distances + e, dim =1)
         weighted = self.weighting_function(cluster_weight_assignment, distances, is_fixed)
