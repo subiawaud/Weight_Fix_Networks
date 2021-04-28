@@ -169,7 +169,7 @@ class Cluster_Determination():
 
     def relative_weighting(self, weighting, distance, weights):
         weighted = self.standard_weighting(weighting, distance)
-        weighted = torch.div(weighted, torch.abs(weights))
+        weighted = torch.div(weighted, torch.abs(weights) + 1e-12)
         weighted = torch.where(torch.abs(weights) > self.zero_distance, weighted, torch.zeros_like(weights, device=weighted.device))
         return weighted
 

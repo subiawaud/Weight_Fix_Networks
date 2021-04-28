@@ -39,6 +39,10 @@ class Weight_Fix_Base(pl.LightningModule):
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs
         self.set_optim(max_epochs)
+        self.parameter_iterator = Parameter_Iterator(self, self.layers_fixed)
+        self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
+        self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, self.zero_distance, self.device)
+        self.metric_logger = Metric_Capture(self)
 
     def set_loggers(self, inner, outer):
         self.metric_logger.set_loggers(inner, outer)
@@ -49,6 +53,7 @@ class Weight_Fix_Base(pl.LightningModule):
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d)
         else:
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
+        self.zero_distance = zero_distance
         self.parameter_iterator = Parameter_Iterator(self, self.layers_fixed)
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
@@ -183,7 +188,7 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def determine_which_weights_are_newly_fixed(self, fixed, flattened_network):
         currently_fixed_indicies = np.argwhere(flattened_network.cpu())
-        new_fixed = np.setdiff1d(np.argwhere(fixed), currently_fixed_indicies)
+        new_fixed = np.setdiff1d(np.argwhere(fixed.cpu()), currently_fixed_indicies)
 #        new_fixed = np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
         print('currently fixed indicies', currently_fixed_indicies)
         print('newly fixed indexes', new_fixed)
@@ -274,7 +279,7 @@ class Weight_Fix_Base(pl.LightningModule):
         for n, pp in self.named_modules():
           if isinstance(pp, self.layers_fixed):
               for n, v in pp.named_parameters():
-                 v.grad.data[self.is_fixed[i]] = torch.zeros_like(v.grad.data[self.is_fixed[i]])
+                 v.grad.data[self.is_fixed[i]] = 0 # torch.zeros_like(v.grad.data[self.is_fixed[i]])
                  if self.current_epoch == self.max_epochs-1:
                      self.update_gradient_data_tracker(i, v.grad)
                  i += 1
