@@ -180,10 +180,8 @@ class Cluster_Determination():
 
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
-     #   if is_fixed is None and only_not_fixed:
+
         weights_not_fixed = self.grab_only_those_not_fixed()
-       # elif is_fixed is None:
-        #    is_fixed = self.flattener.flatten_network_tensor()
         distances = torch.zeros(weights_not_fixed.size()[0], cluster_centers.size()[1], device=weights_not_fixed.device)
         distances = self.distance_calculator.distance_calc(weights_not_fixed, cluster_centers, distances, requires_grad)
         return distances, weights_not_fixed
@@ -230,6 +228,7 @@ class Cluster_Determination():
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
         distances, is_fixed = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
+        print(distances)
         e = 1e-12
         cluster_weight_assignment = F.softmin(distances + e, dim =1)
         weighted = self.weighting_function(cluster_weight_assignment, distances, is_fixed)
