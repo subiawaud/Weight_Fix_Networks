@@ -103,7 +103,6 @@ class Cluster_Determination():
     def find_the_next_cluster(self, weights, is_fixed, vals, zero_index,  max_dist, to_cluster):
         #fixed_but_not_fixed = torch.logical_and(already_fixed, ~is_fixed)
         print('weight values', weights)
-
         distances = torch.abs(weights[~is_fixed] - vals.unsqueeze(1))  # take the distances between weights and vals
         #if there is still an issue, it will be related to the assignment of closest and not that distance between (me thinks)
         print('vals at start', vals)
@@ -163,6 +162,33 @@ class Cluster_Determination():
             print(3)
             return sorted_indexes[:first_larger], vals[am], local_cluster_distances[sorted_indexes[:first_larger]]
     
+        
+
+    def standard_weighting(self, weighting, distance):
+        return torch.sum(torch.square(weighting * distance), axis =1)
+
+    def relative_weighting(self, weighting, distance, weights):
+        weighted = self.standard_weighting(weighting, distance)
+        weighted = torch.div(weighted, torch.abs(weights))
+        weighted = torch.where(torch.abs(weights) > self.zero_distance, weighted, torch.zeros_like(weights, device=weighted.device))
+        return weighted
+
+
+    def grab_only_those_not_fixed(self):
+        flattened_model_weights = self.flattener.flatten_network_tensor()
+        return torch.index_select(flattened_model_weights,0, self.not_fixed)
+
+
+    def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
+     #   if is_fixed is None and only_not_fixed:
+        weights_not_fixed = self.grab_only_those_not_fixed()
+       # elif is_fixed is None:
+        #    is_fixed = self.flattener.flatten_network_tensor()
+        distances = torch.zeros(weights_not_fixed.size()[0], cluster_centers.size()[1], device=weights_not_fixed.device)
+        distances = self.distance_calculator.distance_calc(weights_not_fixed, cluster_centers, distances, requires_grad)
+        return distances, weights_not_fixed
+
+
     def get_the_clusters(self, percent, dist_allowed):
         weights = self.flattener.flatten_network_tensor()
         dev = weights.device
@@ -201,34 +227,6 @@ class Cluster_Determination():
         self.is_fixed_flat = is_fixed.to(self.device)
         self.not_fixed = torch.where(~self.is_fixed_flat)[0].to(dev)
         return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights
-
-        
-
-    def standard_weighting(self, weighting, distance):
-        return torch.sum(torch.square(weighting * distance), axis =1)
-
-    def relative_weighting(self, weighting, distance, weights):
-        weighted = self.standard_weighting(weighting, distance)
-        weighted = torch.div(weighted, torch.abs(weights))
-        weighted = torch.where(torch.abs(weights) > self.zero_distance, weights, torch.zeros_like(weights, device=weighted.device))
-        return weighted
-
-
-    def grab_only_those_not_fixed(self):
-        flattened_model_weights = self.flattener.flatten_network_tensor()
-        return torch.index_select(flattened_model_weights,0, self.not_fixed)
-
-
-    def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
-     #   if is_fixed is None and only_not_fixed:
-        weights_not_fixed = self.grab_only_those_not_fixed()
-       # elif is_fixed is None:
-        #    is_fixed = self.flattener.flatten_network_tensor()
-        distances = torch.zeros(weights_not_fixed.size()[0], cluster_centers.size()[1], device=weights_not_fixed.device)
-        distances = self.distance_calculator.distance_calc(weights_not_fixed, cluster_centers, distances, requires_grad)
-        return distances, weights_not_fixed
-
-
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
         distances, is_fixed = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)

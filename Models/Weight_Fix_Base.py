@@ -146,6 +146,7 @@ class Weight_Fix_Base(pl.LightningModule):
         if self.regularisation_ratio  > 0:
             cluster_error = self.cluster_determinator.get_cluster_assignment_prob(self.centroid_to_regularise_to, requires_grad = True)
             alpha = self.calculate_cluster_error_alpha(ce, cluster_error)
+            print('ce', cluster_error)
             return alpha * cluster_error
         else:
             return 0

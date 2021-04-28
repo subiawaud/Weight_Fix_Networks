@@ -39,8 +39,8 @@ class Pretrained_Model_Template(Weight_Fix_Base):
 
            self.scheduler = None
            if self.use_sched and self.max_epochs > 2:
-              step_size = self.max_epochs//3
-              self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=step_size, gamma=0.1)
+              step_size = self.max_epochs//2
+#              self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=step_size, gamma=0.1)
               # self.scheduler =   torch.optim.lr_scheduler.CosineAnnealingLR(self.optim, T_max = max_epochs+1)
               # self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
               #                                                         steps_per_epoch=int(1*self.train_size)//self.batch_size,
