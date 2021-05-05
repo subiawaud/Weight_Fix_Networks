@@ -33,6 +33,13 @@ class ImageNet_Module(pl.LightningDataModule):
                 return target_transform
              else:
                 return None
+        def test_transform(self):
+                return transforms.Compose([
+                        transforms.Resize((256, 256)),
+                        transforms.CenterCrop(224),
+                        transforms.ToTensor(),
+                        self.normalise])
+
 
         def transform_select(self, shuffle_pixels = False, random_pixels=False):
              if shuffle_pixels:
@@ -56,7 +63,7 @@ class ImageNet_Module(pl.LightningDataModule):
              else:
                 return transforms.Compose([
                         transforms.Resize((256, 256)),
-                        transforms.CenterCrop(224),
+                        transforms.RandomCrop(224),
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         self.normalise])
@@ -75,7 +82,7 @@ class ImageNet_Module(pl.LightningDataModule):
                         self.train, self.val = random_split(im_full, [train_s, val_s])
 
                 if stage == 'test' or stage is None:
-                        self.test = ImageFolder(self.data_dir + '/val', transform=self.transform)
+                        self.test = ImageFolder(self.data_dir + '/val', transform=self.test_transform)
 
         def train_dataloader(self):
 #'                sampler = torch.utils.data.distributed.DistributedSampler(self.train)
