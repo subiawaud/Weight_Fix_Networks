@@ -13,7 +13,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
                 self.target_transform = self.target_transform_select(shuffle_labels)
                 self.targets = 10
                 self.dims = (3,32,32)
-                self.bs = 256
+                self.bs = 400
                 self.name = 'CIFAR10'
 
         def target_transform_select(self, shuffle_labels = False):
@@ -44,6 +44,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
                         transforms.RandomHorizontalFlip(),
                         transforms.ToTensor(),
                         self.normalise])
+
         def test_transform(self):
                         return transforms.Compose([
                         transforms.ToTensor(),
@@ -64,6 +65,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
                 if stage == 'fit' or stage is None:
                         cifar_full = CIFAR10(self.data_dir, train = True, transform=self.transform, target_transform=self.target_transform, download=True)
                         self.train, self.val = random_split(cifar_full, [45000, 5000])
+                     #   self.train, self.val = cifar_full, cifar_full
 
                 if stage == 'test' or stage is None:
                         self.test = CIFAR10(self.data_dir, train = False, transform=self.test_transform(), target_transform=self.target_transform)

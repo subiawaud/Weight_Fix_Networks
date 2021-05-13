@@ -8,6 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 import torchvision.models as models
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from PyTorch_CIFAR10.cifar10_models import *
 from Models.All_Conv_4 import All_Conv_4
 import re
@@ -52,14 +53,22 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
         if x == percentages[0] or x == check_point: # or x == percentages[-1]: # or x == (iterations - 1):
           epochs = first_last_epochs
         else:
-          epochs = rest_epochs + i*epoch_increment
+          epochs = rest_epochs + (i//2)*epoch_increment
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
         #trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
-        trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+       # early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0.00, patience=2,verbose=False,mode='min')
+
+        trainer = pl.Trainer(gpus=1, auto_lr_find=True)
+        lr_finder = trainer.tuner.lr_find(model,datamodule=data, num_training=200, mode='linear', max_lr = 1e-04, min_lr=1e-07)
+        new_lr = lr_finder.suggestion()
+        model.lr = new_lr
+        trainer = pl.Trainer(gpus=1, max_epochs = epochs, gradient_clip_val=1, logger = inner_logger, num_sanity_val_steps = 0,
+                             checkpoint_callback=False)
         trainer.fit(model, data)
+
         if x == percentages[0]:
-            orig_acc = trainer.test(model)[0]['test_acc_epoch']
+            orig_acc = trainer.test(model)[0]['test_acc']
             orig_entropy = model.get_weight_entropy()
             orig_params = model.get_number_of_u_params()
         else:
@@ -85,8 +94,8 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     trainer.fit(model, data)
     trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
     model.print_unique_params()
-    acc = trainer.test(model, ckpt_path=None)[0]['test_acc_epoch']
-    model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd)
+    acc = trainer.test(model, ckpt_path=None)[0]['test_acc']
+    model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd, bn)
 
 def get_model(model, data):
     print(model, data)
@@ -99,7 +108,7 @@ def get_model(model, data):
         model.name = 'conv4'
         return lr, use_sched, model, 'ADAM'
     if model == 'resnet' and data == 'cifar10':
-        lr = 0.00002
+        lr = 0.000002
         m = resnet18(pretrained=True)
         m.name = model
         return lr, use_sched, m, 'ADAM'
@@ -134,10 +143,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
-    parser.add_argument('--percentages', nargs='+', type=float, default = [0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
+    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.025]) #0.1, 0.15, 0.2, 0.25, 0.3
+    parser.add_argument('--percentages', nargs='+', type=float, default = [0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.995, 0.999,  1.0])
     parser.add_argument('--first_epoch', type=int, default =0)
-    parser.add_argument('--fixing_epochs', type=int, default = 3)
+    parser.add_argument('--fixing_epochs', type=int, default = 5)
     parser.add_argument('--epoch_increment', type=int, default = 0)
     parser.add_argument('--cluster_bit_fix', default = 'pow_2_add')
     parser.add_argument('--name', default = "testing_relative")
@@ -146,7 +155,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', default = 'resnet')
     parser.add_argument('--non_regd', default = 0, type=float)
     parser.add_argument('--dataset', default = 'cifar10')
-    parser.add_argument('--zero_distance', default = 2**-11, type=float)
+    parser.add_argument('--zero_distance', default = 2**-12, type=float)
     parser.add_argument('--bn_inc', default=0.0, type=float)
     parser.add_argument('--resume',default=0.0, type=float)
     args = parser.parse_args()

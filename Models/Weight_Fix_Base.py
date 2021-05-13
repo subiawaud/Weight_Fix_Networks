@@ -32,13 +32,14 @@ class Weight_Fix_Base(pl.LightningModule):
         self.tracking_gradients = False
         self.percentage_fixed = 0
         self.layers_fixed = None
+        self.lr = 2e-6
         self.taccuracy = pl.metrics.Accuracy()
         self.ttaccuracy = pl.metrics.Accuracy()
         self.vaccuracy = pl.metrics.Accuracy()
 
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs
-        self.set_optim(max_epochs)
+        self.set_optim(max_epochs, self.lr)
         self.parameter_iterator = Parameter_Iterator(self, self.layers_fixed)
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
         self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, self.zero_distance, self.device)
@@ -63,6 +64,7 @@ class Weight_Fix_Base(pl.LightningModule):
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
         self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance, self.device)
         self.metric_logger = Metric_Capture(self)
+        self.centroid_to_regularise_to = torch.Tensor([[0]])
         self.converter = Converter(cluster_bit_fix, distance_calculation_type, zero_distance, self.device)
         self.smallest_distance_allowed = smallest_distance_allowed
         self.cluster_bit_fix = cluster_bit_fix
@@ -93,11 +95,11 @@ class Weight_Fix_Base(pl.LightningModule):
     def set_layer_shapes(self):
         self.layer_shapes = self.get_layer_shapes()
 
-    def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name, zd):
+    def update_results(self, exp_name, orig_acc, orig_entropy, orig_params, test_acc, fixing_epochs, data_name, zd, bn):
         fixed_params = self.get_number_of_u_params()
         fixed_entropy, fixed_entropy_non_zero = self.get_weight_entropy()
         self.metric_logger.write_to_results_file(exp_name, self.name, self.regularisation_ratio,
-        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_entropy_non_zero, fixed_params, data_name, zd)
+        self.smallest_distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, test_acc, fixed_entropy, fixed_entropy_non_zero, fixed_params, data_name, zd, bn)
 
 
     def get_number_of_u_params(self):
@@ -123,7 +125,7 @@ class Weight_Fix_Base(pl.LightningModule):
         return
 
     @abc.abstractmethod
-    def set_optim(self, epochs):
+    def set_optim(self, epochs,lr):
         return
 
     def configure_optimizers(self):
@@ -134,10 +136,10 @@ class Weight_Fix_Base(pl.LightningModule):
             }
 
         if self.scheduler is not None:
-            return [self.optim], [scheduler]
+            return self.optim, [scheduler]
         else:
             print('no scheduler')
-            return [self.optim]
+            return self.optim
 
     def calculate_cluster_error_alpha(self, ce, cluster_error):
         if self.current_fixing_iteration > self.number_of_fixing_iterations - self.how_many_iterations_not_regularised:
@@ -301,8 +303,8 @@ class Weight_Fix_Base(pl.LightningModule):
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
         acc = self.ttaccuracy(F.softmax(y_hat, dim =1), y)
-        self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        self.log('test_loss', loss, logger=True, on_epoch=True)
         return loss
 
     def test_epoch_end(self, o):
-        self.log('test_acc_epoch', self.ttaccuracy.compute())
+        self.log('test_acc', self.ttaccuracy.compute())
