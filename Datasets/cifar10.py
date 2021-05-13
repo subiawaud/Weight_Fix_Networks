@@ -13,7 +13,7 @@ class CIFAR10DataModule(pl.LightningDataModule):
                 self.target_transform = self.target_transform_select(shuffle_labels)
                 self.targets = 10
                 self.dims = (3,32,32)
-                self.bs = 400
+                self.bs = 128
                 self.name = 'CIFAR10'
 
         def target_transform_select(self, shuffle_labels = False):

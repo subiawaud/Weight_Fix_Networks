@@ -19,7 +19,7 @@ class Pretrained_Model_Template(Weight_Fix_Base):
         self.name = original_model.name
         self.pretrained = original_model
         self.max_epochs = max_epochs
-
+        self.lr = lr
         self.weight_decay = 0.0005
         self.data_module = data_module
         self.batch_size = data_module.bs
@@ -30,9 +30,9 @@ class Pretrained_Model_Template(Weight_Fix_Base):
     def set_optim(self, max_epochs, lr):
            print('The learning rate is ', self.lr)
            if self.opt == 'ADAM':
-               self.optim = torch.optim.Adam(self.parameters(), lr = lr)
+               self.optim = torch.optim.Adam(self.parameters(), lr = self.lr)
            elif self.opt == 'SGD':
-               self.optim = torch.optim.SGD(self.parameters(), lr=lr,
+               self.optim = torch.optim.SGD(self.parameters(), lr=self.lr,
                       momentum=0.9, weight_decay=self.weight_decay)
            else:
                print('NO OPTIMIZER ')

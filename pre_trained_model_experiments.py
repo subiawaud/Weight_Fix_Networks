@@ -56,13 +56,6 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
           epochs = rest_epochs + (i//2)*epoch_increment
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
-        #trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
-       # early_stop_callback = EarlyStopping(monitor='val_loss', min_delta=0.00, patience=2,verbose=False,mode='min')
-
-        trainer = pl.Trainer(gpus=1, auto_lr_find=True)
-        lr_finder = trainer.tuner.lr_find(model,datamodule=data, num_training=200, mode='linear', max_lr = 1e-04, min_lr=1e-07)
-        new_lr = lr_finder.suggestion()
-        model.lr = new_lr
         trainer = pl.Trainer(gpus=1, max_epochs = epochs, gradient_clip_val=1, logger = inner_logger, num_sanity_val_steps = 0,
                              checkpoint_callback=False)
         trainer.fit(model, data)
@@ -113,11 +106,11 @@ def get_model(model, data):
         m.name = model
         return lr, use_sched, m, 'ADAM'
     if model == 'resnet' and data == 'imnet':
-        lr = 0.01
+        lr = 0.000002
         model = models.resnet18(pretrained=False)
         model.name = 'resnet18'
         model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
-        return lr, use_sched, model, 'SGD'
+        return lr, use_sched, model, 'ADAM'
     if model == 'mobilenet':
         lr = 0.00002
         m = mobilenet_v2(pretrained=True)
@@ -143,7 +136,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.025]) #0.1, 0.15, 0.2, 0.25, 0.3
+    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.995, 0.999,  1.0])
     parser.add_argument('--first_epoch', type=int, default =0)
     parser.add_argument('--fixing_epochs', type=int, default = 5)

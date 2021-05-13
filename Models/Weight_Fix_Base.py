@@ -32,7 +32,7 @@ class Weight_Fix_Base(pl.LightningModule):
         self.tracking_gradients = False
         self.percentage_fixed = 0
         self.layers_fixed = None
-        self.lr = 2e-6
+
         self.taccuracy = pl.metrics.Accuracy()
         self.ttaccuracy = pl.metrics.Accuracy()
         self.vaccuracy = pl.metrics.Accuracy()
@@ -64,7 +64,7 @@ class Weight_Fix_Base(pl.LightningModule):
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
         self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance, self.device)
         self.metric_logger = Metric_Capture(self)
-        self.centroid_to_regularise_to = torch.Tensor([[0]])
+
         self.converter = Converter(cluster_bit_fix, distance_calculation_type, zero_distance, self.device)
         self.smallest_distance_allowed = smallest_distance_allowed
         self.cluster_bit_fix = cluster_bit_fix
@@ -125,7 +125,7 @@ class Weight_Fix_Base(pl.LightningModule):
         return
 
     @abc.abstractmethod
-    def set_optim(self, epochs,lr):
+    def set_optim(self, epochs):
         return
 
     def configure_optimizers(self):
