@@ -203,8 +203,9 @@ class Weight_Fix_Base(pl.LightningModule):
 #        return torch.max(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
-#        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
-        a = self.smallest_distance_allowed
+        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
+#        a = self.smallest_distance_allowed 
+        print(a, 'THIS is A')
         if self.number_of_clusters >= 100: # to stop out of memory issues
             a *= 2
         return a
