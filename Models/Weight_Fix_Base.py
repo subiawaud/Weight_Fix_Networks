@@ -199,27 +199,15 @@ class Weight_Fix_Base(pl.LightningModule):
         print('distances to be fixed', distances_of_newly_fixed)
         print('mean to be fixed', torch.mean(distances_of_newly_fixed))
         print('max to be fixed', torch.max(distances_of_newly_fixed))
-#        print(torch.sum(distances_of_newly_fixed > 0))
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
-#        return torch.max(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
         a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
-#        a = self.smallest_distance_allowed 
-        print(a, 'THIS is A')
-        if self.number_of_clusters >= 100: # to stop out of memory issues
-            a *= 2
         return a
 
     def calculate_how_many_to_fix(self, weights, percentage):
         return int(round(len(weights)*percentage, 2))
 
-    def threshold_breached_handler(self, weights, percentage, quantised_weights):
-         self.number_of_clusters += 1
-         if (self.number_of_clusters == 10 or (self.number_of_clusters % 30 == 0)) and self.cluster_bit_fix == "pow_2_add":
-                 self.converter.increase_pow_2_level()
-                 return self.apply_clustering_to_network()
-         return self.apply_clustering_to_network(quantised_weights)
 
     def gather_assigned_clusters(self, centroids, idx, closest_cluster_list,  previous_weights):
         weights = torch.zeros_like(previous_weights).to(self.device)
@@ -247,9 +235,6 @@ class Weight_Fix_Base(pl.LightningModule):
         weights = self.flattener.flatten_network_tensor()
         percentage = self.percentage_fixed
         number_fixed = self.calculate_how_many_to_fix(weights, percentage)
-       # if quantised_weights is None:
-       #     quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
-        #centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
         centroids, is_fixed, closest_cluster_distance, clustered_weights = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
         print('centroids chosen', centroids)
         print('is fixed chosen', torch.sum(is_fixed))
