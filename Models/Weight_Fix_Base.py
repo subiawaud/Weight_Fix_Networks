@@ -34,6 +34,7 @@ class Weight_Fix_Base(pl.LightningModule):
         self.layers_fixed = None
         self.taccuracy = pl.metrics.Accuracy()
         self.ttaccuracy = pl.metrics.Accuracy()
+        self.tt5accuracy = pl.metrics.Accuracy(top_k=5)
         self.vaccuracy = pl.metrics.Accuracy()
 
     def reset_optim(self, max_epochs):
@@ -203,7 +204,7 @@ class Weight_Fix_Base(pl.LightningModule):
 #        return torch.max(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
-        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
+        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
 #        a = self.smallest_distance_allowed 
         print(a, 'THIS is A')
         if self.number_of_clusters >= 100: # to stop out of memory issues
@@ -302,8 +303,9 @@ class Weight_Fix_Base(pl.LightningModule):
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
         acc = self.ttaccuracy(F.softmax(y_hat, dim =1), y)
+        top_5_acc = self.tt5accuracy(F.softmax(y_hat, dim =1), y)
         self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        self.log('test_acc', acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        self.log('test_acc5', top_5_acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         return loss
 
-    def test_epoch_end(self, o):
-        self.log('test_acc_epoch', self.ttaccuracy.compute())
