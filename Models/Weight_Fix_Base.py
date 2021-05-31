@@ -35,6 +35,7 @@ class Weight_Fix_Base(pl.LightningModule):
 
         self.taccuracy = pl.metrics.Accuracy()
         self.ttaccuracy = pl.metrics.Accuracy()
+        self.tt5accuracy = pl.metrics.Accuracy(top_k=5)
         self.vaccuracy = pl.metrics.Accuracy()
 
     def reset_optim(self, max_epochs):
@@ -200,26 +201,15 @@ class Weight_Fix_Base(pl.LightningModule):
         print('distances to be fixed', distances_of_newly_fixed)
         print('mean to be fixed', torch.mean(distances_of_newly_fixed))
         print('max to be fixed', torch.max(distances_of_newly_fixed))
-#        print(torch.sum(distances_of_newly_fixed > 0))
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
-#        return torch.max(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
-#        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed + self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)/10))
-        a = self.smallest_distance_allowed
-        if self.number_of_clusters >= 100: # to stop out of memory issues
-            a *= 2
+        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
         return a
 
     def calculate_how_many_to_fix(self, weights, percentage):
         return int(round(len(weights)*percentage, 2))
 
-    def threshold_breached_handler(self, weights, percentage, quantised_weights):
-         self.number_of_clusters += 1
-         if (self.number_of_clusters == 10 or (self.number_of_clusters % 30 == 0)) and self.cluster_bit_fix == "pow_2_add":
-                 self.converter.increase_pow_2_level()
-                 return self.apply_clustering_to_network()
-         return self.apply_clustering_to_network(quantised_weights)
 
     def gather_assigned_clusters(self, centroids, idx, closest_cluster_list,  previous_weights):
         weights = torch.zeros_like(previous_weights).to(self.device)
@@ -247,9 +237,6 @@ class Weight_Fix_Base(pl.LightningModule):
         weights = self.flattener.flatten_network_tensor()
         percentage = self.percentage_fixed
         number_fixed = self.calculate_how_many_to_fix(weights, percentage)
-       # if quantised_weights is None:
-       #     quantised_weights = self.converter.round_to_precision(weights, self.calculate_allowable_distance())
-        #centroids, centroid_to_regularise_to = self.cluster_determinator.find_closest_centroids(quantised_weights, self.number_of_clusters)
         centroids, is_fixed, closest_cluster_distance, clustered_weights = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
         print('centroids chosen', centroids)
         print('is fixed chosen', torch.sum(is_fixed))
@@ -303,8 +290,9 @@ class Weight_Fix_Base(pl.LightningModule):
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
         acc = self.ttaccuracy(F.softmax(y_hat, dim =1), y)
-        self.log('test_loss', loss, logger=True, on_epoch=True)
+        top_5_acc = self.tt5accuracy(F.softmax(y_hat, dim =1), y)
+        self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        self.log('test_acc', acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        self.log('test_acc5', top_5_acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         return loss
 
-    def test_epoch_end(self, o):
-        self.log('test_acc', self.ttaccuracy.compute())
