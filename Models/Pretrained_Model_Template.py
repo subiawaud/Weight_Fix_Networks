@@ -27,8 +27,8 @@ class Pretrained_Model_Template(Weight_Fix_Base):
         self.use_sched = use_sched
         self.opt = opt
 
-    def set_optim(self, max_epochs):
-           print('in here ', self.train_size)
+    def set_optim(self, max_epochs, lr):
+           print('The learning rate is ', self.lr)
            if self.opt == 'ADAM':
                self.optim = torch.optim.Adam(self.parameters(), lr = self.lr)
            elif self.opt == 'SGD':
@@ -38,10 +38,10 @@ class Pretrained_Model_Template(Weight_Fix_Base):
                print('NO OPTIMIZER ')
 
            self.scheduler = None
-    #       if self.use_sched and self.max_epochs > 2:
+      #     if self.use_sched and self.max_epochs > 2:
               #step_size = self.max_epochs//2
               #self.scheduler = torch.optim.lr_scheduler.StepLR(self.optim, step_size=step_size, gamma=0.1)
-#              self.scheduler =   torch.optim.lr_scheduler.CosineAnnealingLR(self.optim, T_max = max_epochs+1)
+          #    self.scheduler =   torch.optim.lr_scheduler.CosineAnnealingLR(self.optim, T_max = max_epochs+1)
               # self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
               #                                                         steps_per_epoch=int(1*self.train_size)//self.batch_size,
               #                                                          epochs=max_epochs+1)

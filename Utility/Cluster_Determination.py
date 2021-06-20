@@ -178,7 +178,7 @@ class Cluster_Determination():
 
     def grab_only_those_not_fixed(self):
         flattened_model_weights = self.flattener.flatten_network_tensor()
-        return torch.index_select(flattened_model_weights,0, self.not_fixed)
+        return torch.index_select(flattened_model_weights,0, self.not_fixed.to(flattened_model_weights.device))
 
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
