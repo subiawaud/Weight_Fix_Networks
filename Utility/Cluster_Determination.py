@@ -10,6 +10,7 @@ class Cluster_Determination():
     def __init__(self, distance_calculator, model, is_fixed, distance_type, layer_shapes, flattener, zero_distance, device):
         self.distance_calculator = distance_calculator
         self.model = model
+        self.temp = 0.05
         self.flattener = flattener
         self.is_fixed_flat = self.flattener.flatten_standard(is_fixed).detach()
         self.zero_distance = zero_distance
@@ -78,14 +79,15 @@ class Cluster_Determination():
         return closest_cluster, closest_cluster_index
 
     def get_clusters(self, mi, d):
-        ma = (mi)/(1 - d) # if we use the mean dist
-         #   ma = mi/(1-d) # max dist use
+#        ma = (2*d*mi)/(1 - d) # if we use the mean dist
+        d = min(d, 0.9999)
+        ma = -(mi + mi*d)/(d - 1)
         return ma 
 
 
 
     def create_possible_centroids(self, max_weight, min_weight, a, powl):
-           vals = np.zeros(100000)
+           vals = np.zeros(1000000)
            boundary = max(abs(min_weight), max_weight)
            ma = self.zero_distance
            vals[0] = 0
@@ -180,7 +182,6 @@ class Cluster_Determination():
 
 
     def get_cluster_distances(self, is_fixed = None, cluster_centers = None, only_not_fixed = True, requires_grad = False):
-
         weights_not_fixed = self.grab_only_those_not_fixed()
         distances = torch.zeros(weights_not_fixed.size()[0], cluster_centers.size()[1], device=weights_not_fixed.device)
         distances = self.distance_calculator.distance_calc(weights_not_fixed, cluster_centers, distances, requires_grad)
@@ -227,8 +228,13 @@ class Cluster_Determination():
         return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
-        distances, is_fixed = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
-        e = 1e-12
-        cluster_weight_assignment = F.softmin(distances + e, dim =1)
-        weighted = self.weighting_function(cluster_weight_assignment, distances, is_fixed)
+        distances, not_fixed_weights = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)
+        e = 1e-14
+        to_make_relative = torch.abs(not_fixed_weights) > self.zero_distance
+        distances[to_make_relative, :]  = torch.transpose(torch.transpose(distances[to_make_relative, :], 0, 1)  / torch.abs(not_fixed_weights[to_make_relative]), 0, 1)
+        if 0.0 in cluster_centers:
+            z_i = torch.argmin(torch.abs(cluster_centers) + e)
+            distances[~to_make_relative, z_i] = 0
+        cluster_weight_assignment = F.softmin((distances + e)/self.temp, dim =1)
+        weighted = torch.sum(cluster_weight_assignment * distances, dim=1)
         return torch.mean(weighted)
