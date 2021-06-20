@@ -1,4 +1,5 @@
 import torch
+import time
 from Models.Pretrained_Model_Template import Pretrained_Model_Template
 from Datasets import cifar10, mnist, imagenet
 import pytorch_lightning as pl
@@ -12,15 +13,21 @@ from PyTorch_CIFAR10.cifar10_models import *
 from Models.All_Conv_4 import All_Conv_4
 import re
 import numpy as np
+
+
 def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, epoch_increment, percentages,distance_allowed, cluster_bit_fix,regularistion_ratio, model_name, non_regd, zd, bn, check_point = 0.0):
     experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-cb={cluster_bit_fix}-e1={first_last_epochs}-fe={rest_epochs}-ei={epoch_increment}-nr={non_regd}-zd={zd}-bn={bn}'
-    dr = f'{os.getcwd()}/experiments/{experiment_name}'
-
+    checkpoint_address = '/scratch/cc2u18/Weight_Fix_Networks/'
+    dr = f'{checkpoint_address}/experiments/{experiment_name}'
     if not os.path.exists(dr):
-        os.makedirs(dr)
+        try:
+            os.makedirs(dr)
+        except:
+            print('drive already exists') 
+
     torch.save(model, dr + '/initial_model')
     outer_logger = TensorBoardLogger(
-                save_dir = f'{os.getcwd()}/experiments/',
+                save_dir = f'{checkpoint_address}/experiments/',
                 version = f'joined',
                 name = experiment_name
                 )
@@ -34,10 +41,23 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
 #         percentages = percentages[percentages >= current]
 #         model = load_from_checkpoint('fix me')
     if check_point > 0.0:
-         
-         model = model.load_from_checkpoint(checkpoint_path=f'{os.getcwd()}/experiments/{experiment_name}/iteration_{check_point}_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, use_sched=model.use_sched,opt= model.opt)
-         model.set_up('relative', cluster_bit_fix, distance_allowed, len(percentages), regularistion_ratio, non_regd, zd, bn)
-         model.flatten_is_fixed()
+        inner_logger = TensorBoardLogger(
+                save_dir = f'{checkpoint_address}/experiments/',
+                version = f'baseline',
+                name = experiment_name
+                )
+        epochs = first_last_epochs
+        trainer = pl.Trainer(gpus=-1, precision=16, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        model.set_loggers(inner_logger, outer_logger)
+        model.reset_optim(0)
+        trainer.fit(model, data)
+        print('GETTING THE ORIGINAL MODEL DATA')
+        orig_acc = trainer.test(model)[0]['test_acc_epoch']
+        orig_entropy = model.get_weight_entropy()
+        orig_params = model.get_number_of_u_params()
+        model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_{check_point}_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, use_sched=model.use_sched,opt= model.opt)
+        model.set_up('relative', cluster_bit_fix, distance_allowed, len(percentages), regularistion_ratio, non_regd, zd, bn)
+        model.flatten_is_fixed()
     for i,x in enumerate(percentages):
         if x < check_point:
                 model.current_fixing_iteration +=1
@@ -45,7 +65,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 continue
         print('percentage of weights ', x)
         inner_logger = TensorBoardLogger(
-                save_dir = f'{os.getcwd()}/experiments/',
+                save_dir = f'{checkpoint_address}/experiments/',
                 version = f'iteration{x}',
                 name = experiment_name
                 )
@@ -55,37 +75,43 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
           epochs = rest_epochs + i*epoch_increment
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
-        #trainer = pl.Trainer(gpus=-1, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
-        trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        trainer = pl.Trainer(gpus=-1, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        #trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
         trainer.fit(model, data)
+        model.eval()
         if x == percentages[0]:
             orig_acc = trainer.test(model)[0]['test_acc_epoch']
             orig_entropy = model.get_weight_entropy()
             orig_params = model.get_number_of_u_params()
         else:
-            trainer.test(model)
-        try:
-                trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/iteration_{x}_final_model')
-                model.save_clusters()
-        except:
-                print('SAVED failed')
+            acc = trainer.test(model)
+            print(acc)
         model.percentage_fixed = x
         model.apply_clustering_to_network()
         model.current_fixing_iteration +=1
         model.reset_weights()
-
+        try:
+                trainer.save_checkpoint(f'{checkpoint_address}/experiments/{experiment_name}/iteration_{x}_final_model')
+                model.save_clusters()
+        except:
+                print('SAVED failed')
     logger = TensorBoardLogger(
-                save_dir = f'{os.getcwd()}/experiments/',
+                save_dir = f'{checkpoint_address}/experiments/',
                 version = f'final',
                 name = experiment_name
                 )
-    model.set_loggers(logger, outer_logger)
+    time.sleep(30)
+    model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, use_sched=model.use_sched,opt= model.opt)
+    model.set_up('relative', cluster_bit_fix, distance_allowed, len(percentages), regularistion_ratio, non_regd, zd, bn)
     model.reset_optim(epochs)
-    trainer = pl.Trainer(gpus=-1, max_epochs = 0, logger = logger, num_sanity_val_steps = 0)
+    trainer = pl.Trainer(gpus=1, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
     trainer.fit(model, data)
-    trainer.save_checkpoint(f'{os.getcwd()}/experiments/{experiment_name}/complete_final_model')
     model.print_unique_params()
+    print('The final test is running')
+    model.eval()
     acc = trainer.test(model, ckpt_path=None)[0]['test_acc_epoch']
+    trainer.save_checkpoint(f'{checkpoint_address}/experiments/{experiment_name}/complete_final_model')
+    torch.save(model.state_dict(), f'{checkpoint_address}/experiments/{experiment_name}/complete_final_model_state_dict')
     model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd)
 
 def get_model(model, data):
@@ -104,11 +130,12 @@ def get_model(model, data):
         m.name = model
         return lr, use_sched, m, 'ADAM'
     if model == 'resnet' and data == 'imnet':
-        lr = 0.01
+        #lr = 0.01
+        lr = 0.00002
         model = models.resnet18(pretrained=False)
         model.name = 'resnet18'
         model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
-        return lr, use_sched, model, 'SGD'
+        return lr, use_sched, model, 'ADAM'
     if model == 'mobilenet':
         lr = 0.00002
         m = mobilenet_v2(pretrained=True)
