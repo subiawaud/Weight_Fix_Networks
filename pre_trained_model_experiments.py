@@ -126,6 +126,7 @@ def get_model(model, data):
         return lr, use_sched, model, 'ADAM'
     if model == 'resnet' and data == 'cifar10':
         lr = 0.00002
+        print('In this bit!!!')
         m = resnet18(pretrained=True)
         m.name = model
         return lr, use_sched, m, 'ADAM'
@@ -135,6 +136,12 @@ def get_model(model, data):
         model = models.resnet18(pretrained=False)
         model.name = 'resnet18'
         model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
+        return lr, use_sched, model, 'ADAM'
+    if model == 'resnet50': # and data == 'imnet':
+        lr = 0.00002
+        model = models.resnet50(pretrained=False)
+        model.name = 'resnet50'
+        model.load_state_dict(torch.load("PyTorch_ImNet/resnet50"))
         return lr, use_sched, model, 'ADAM'
     if model == 'mobilenet':
         lr = 0.00002
@@ -170,7 +177,7 @@ if __name__ == "__main__":
     parser.add_argument('--name', default = "testing_relative")
     parser.add_argument('--distance_calculation_type', default = "relative")
     parser.add_argument('--regularistion_ratio', default = 0.1, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
-    parser.add_argument('--model', default = 'resnet')
+    parser.add_argument('--model', default = 'resnet50')
     parser.add_argument('--non_regd', default = 0, type=float)
     parser.add_argument('--dataset', default = 'cifar10')
     parser.add_argument('--zero_distance', default = 2**-11, type=float)
