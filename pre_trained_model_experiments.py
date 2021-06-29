@@ -1,7 +1,7 @@
 import torch
 import time
 from Models.Pretrained_Model_Template import Pretrained_Model_Template
-from Datasets import cifar10, mnist, imagenet
+from Datasets import cifar10, mnist, imagenet, coco
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 import os
@@ -24,7 +24,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
         try:
             os.makedirs(dr)
         except:
-            print('drive already exists') 
+            print('drive already exists')
 
     torch.save(model, dr + '/initial_model')
     outer_logger = TensorBoardLogger(
@@ -133,15 +133,19 @@ def get_model(model, data):
         m = resnet18(pretrained=True)
         m.name = model
         return lr, use_sched, m, 'ADAM'
-    if model == 'resnet' and data == 'imnet':
-
+    if model == 'resnet50' and data == 'coco':
         lr = 0.00002
+        m = models.segmentation.fcn_resnet50(pretrained=True)
+        m.name = 'resnet50_coco'
+        return lr, use_sched, m, 'ADAM'
 
+    if model == 'resnet' and data == 'imnet':
+        lr = 0.00002
         model = models.resnet18(pretrained=False)
         model.name = 'resnet18'
         model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
         return lr, use_sched, model, 'ADAM'
-    if model == 'mobilenet':
+    if model == 'mobilenet' and data = 'cifar10':
         lr = 0.00002
         m = mobilenet_v2(pretrained=True)
         m.name = model
@@ -152,6 +156,8 @@ def determine_dataset(data_arg):
         return cifar10.CIFAR10DataModule()
     elif data_arg == 'imnet':
         return imagenet.ImageNet_Module()
+    elif data_arg == 'coco':
+        return coco.CocoDataModule()
 
 def main(args):
     data = determine_dataset(args.dataset)
