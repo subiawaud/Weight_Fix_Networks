@@ -1,7 +1,7 @@
 import torch
 import time
 from Models.Pretrained_Model_Template import Pretrained_Model_Template
-from Datasets import cifar10, mnist, imagenet
+from Datasets import cifar10, mnist, imagenet, coco
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger
 import os
@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 import torchvision.models as models
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from PyTorch_CIFAR10.cifar10_models import *
 from Models.All_Conv_4 import All_Conv_4
 import re
@@ -23,7 +24,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
         try:
             os.makedirs(dr)
         except:
-            print('drive already exists') 
+            print('drive already exists')
 
     torch.save(model, dr + '/initial_model')
     outer_logger = TensorBoardLogger(
@@ -72,15 +73,17 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
         if x == percentages[0] or x == check_point: # or x == percentages[-1]: # or x == (iterations - 1):
           epochs = first_last_epochs
         else:
-          epochs = rest_epochs + i*epoch_increment
+          epochs = rest_epochs + (i//2)*epoch_increment
         model.set_loggers(inner_logger, outer_logger)
         model.reset_optim(epochs)
-        trainer = pl.Trainer(gpus=-1, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
-        #trainer = pl.Trainer(gpus=1, max_epochs = epochs, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+
+        trainer = pl.Trainer(gpus=1, max_epochs = epochs, gradient_clip_val=1, logger = inner_logger, num_sanity_val_steps = 0,
+                             checkpoint_callback=False)
         trainer.fit(model, data)
-        model.eval()
+
+
         if x == percentages[0]:
-            orig_acc = trainer.test(model)[0]['test_acc_epoch']
+            orig_acc = trainer.test(model)[0]['test_acc']
             orig_entropy = model.get_weight_entropy()
             orig_params = model.get_number_of_u_params()
         else:
@@ -114,6 +117,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     torch.save(model.state_dict(), f'{checkpoint_address}/experiments/{experiment_name}/complete_final_model_state_dict')
     model.update_results(experiment_name, orig_acc, orig_entropy, orig_params, acc, rest_epochs, data.name, zd)
 
+
 def get_model(model, data):
     print(model, data)
     use_sched = True
@@ -125,25 +129,34 @@ def get_model(model, data):
         model.name = 'conv4'
         return lr, use_sched, model, 'ADAM'
     if model == 'resnet' and data == 'cifar10':
+
         lr = 0.00002
-        print('In this bit!!!')
+
         m = resnet18(pretrained=True)
         m.name = model
         return lr, use_sched, m, 'ADAM'
+    if model == 'resnet50' and data == 'coco':
+        lr = 0.00002
+        m = models.segmentation.fcn_resnet50(pretrained=True)
+        m.name = 'resnet50_coco'
+        return lr, use_sched, m, 'ADAM'
+
     if model == 'resnet' and data == 'imnet':
-        #lr = 0.01
         lr = 0.00002
         model = models.resnet18(pretrained=False)
         model.name = 'resnet18'
         model.load_state_dict(torch.load("PyTorch_ImNet/resnet18"))
         return lr, use_sched, model, 'ADAM'
+
     if model == 'resnet50': # and data == 'imnet':
         lr = 0.00002
         model = models.resnet50(pretrained=False)
         model.name = 'resnet50'
         model.load_state_dict(torch.load("PyTorch_ImNet/resnet50"))
         return lr, use_sched, model, 'ADAM'
-    if model == 'mobilenet':
+
+    if model == 'mobilenet' and data = 'cifar10':
+
         lr = 0.00002
         m = mobilenet_v2(pretrained=True)
         m.name = model
@@ -154,6 +167,8 @@ def determine_dataset(data_arg):
         return cifar10.CIFAR10DataModule()
     elif data_arg == 'imnet':
         return imagenet.ImageNet_Module()
+    elif data_arg == 'coco':
+        return coco.CocoDataModule()
 
 def main(args):
     data = determine_dataset(args.dataset)
@@ -169,9 +184,9 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
-    parser.add_argument('--percentages', nargs='+', type=float, default = [0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.975, 0.99, 0.995, 0.999,  1.0])
+    parser.add_argument('--percentages', nargs='+', type=float, default = [0.2, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 0.99, 0.995, 0.999,  1.0])
     parser.add_argument('--first_epoch', type=int, default =0)
-    parser.add_argument('--fixing_epochs', type=int, default = 3)
+    parser.add_argument('--fixing_epochs', type=int, default = 5)
     parser.add_argument('--epoch_increment', type=int, default = 0)
     parser.add_argument('--cluster_bit_fix', default = 'pow_2_add')
     parser.add_argument('--name', default = "testing_relative")
@@ -180,7 +195,7 @@ if __name__ == "__main__":
     parser.add_argument('--model', default = 'resnet50')
     parser.add_argument('--non_regd', default = 0, type=float)
     parser.add_argument('--dataset', default = 'cifar10')
-    parser.add_argument('--zero_distance', default = 2**-11, type=float)
+    parser.add_argument('--zero_distance', default = 2**-12, type=float)
     parser.add_argument('--bn_inc', default=0.0, type=float)
     parser.add_argument('--resume',default=0.0, type=float)
     args = parser.parse_args()
