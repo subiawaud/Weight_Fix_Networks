@@ -7,11 +7,12 @@ from torchvision.datasets import CocoDetection
 class CocoDataModule(pl.LightningDataModule):
         def __init__(self, data_dir: str = 'Datasets/', shuffle_pixels=False, shuffle_labels=False, random_pixels=False):
                 super().__init__()
-                self.data_dir = data_dir
-                self.transform = self.transform_select(shuffle_pixels, random_pixels)
+                self.data_year = 2017
+                self.data_dir = '/scratch/cc2u18/data/coco/images/'
+                self.data_json = '/scratch/cc2u18/data/coco/annotations/'
                 self.normalise = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                self.transform = self.transform_select(shuffle_pixels, random_pixels)
                 self.target_transform = self.target_transform_select(shuffle_labels)
-                self.targets = 10
                 self.dims = (3,320,320)
                 self.bs = 4
                 self.name = 'Coco'
@@ -56,18 +57,14 @@ class CocoDataModule(pl.LightningDataModule):
              x = x.view(-1)[idx].view(x.size())
              return x
 
-        def prepare_data(self):
-                CocoDetection(self.data_dir, train = True, download = True)
-                CocoDetection(self.data_dir, train = False, download = True)
-
         def setup(self, stage=None):
                 if stage == 'fit' or stage is None:
-                        coco_full = CocoDetection(self.data_dir, train = True, transform=self.transform, target_transform=self.target_transform, download=True)
-                        self.train, self.val = random_split(coco_full, [int(len(cifar_full)*0.9),int(len(cifar_full)*0.1)])
-                     #   self.train, self.val = coco_full, cifar_full
+                        coco = CocoDetection(root=self.data_dir+f'/train{self.data_year}', annFile=self.data_json+f'/instances_train{self.data_year}.json', transform=self.transform, target_transform=self.target_transform)
+                        s = len(coco)
+                        self.train, self.val = random_split(coco, [int(0.9*s)+1, int(0.1*s)])
 
                 if stage == 'test' or stage is None:
-                        self.test = coco(self.data_dir, train = False, transform=self.test_transform(), target_transform=self.target_transform)
+                        self.test  = CocoDetection(root=self.data_dir+f'/val{self.data_year}', annFile=self.data_json+f'/instances_val{self.data_year}.json', transform=self.transform, target_transform=self.target_transform)
 
         def train_dataloader(self):
                 return DataLoader(self.train, batch_size=self.bs, num_workers = 6)

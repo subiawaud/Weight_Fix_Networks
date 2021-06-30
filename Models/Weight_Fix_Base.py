@@ -25,18 +25,23 @@ from kmeans_pytorch import kmeans
 
 class Weight_Fix_Base(pl.LightningModule):
     __metaclass_= abc.ABCMeta # to allow for abstract method implementations
-    def __init__(self):
+    def __init__(self, task_type):
         super(Weight_Fix_Base, self).__init__()
         self.current_fixing_iteration = 0 # which iteration of the fixing algorithm are we at
         self.name = 'Base'  # object name
         self.tracking_gradients = False
         self.percentage_fixed = 0
         self.layers_fixed = None
-
-        self.taccuracy = pl.metrics.Accuracy()
-        self.ttaccuracy = pl.metrics.Accuracy()
-        self.tt5accuracy = pl.metrics.Accuracy(top_k=5)
-        self.vaccuracy = pl.metrics.Accuracy()
+        self.task_type = task_type
+        if self.task_type == 'classification':
+            self.taccuracy = pl.metrics.Accuracy()
+            self.ttaccuracy = pl.metrics.Accuracy()
+            self.tt5accuracy = pl.metrics.Accuracy(top_k=5)
+            self.vaccuracy = pl.metrics.Accuracy()
+        else:
+            self.taccuracy = pl.metrics.IOU()
+            self.ttaccuracy = pl.metrics.IOU()
+            self.vaccuracy = pl.metrics.IOU()
 
     def reset_optim(self, max_epochs):
         self.max_epochs = max_epochs
@@ -290,9 +295,10 @@ class Weight_Fix_Base(pl.LightningModule):
         y_hat = self(x)
         loss = F.cross_entropy(y_hat, y)
         acc = self.ttaccuracy(F.softmax(y_hat, dim =1), y)
-        top_5_acc = self.tt5accuracy(F.softmax(y_hat, dim =1), y)
         self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         self.log('test_acc', acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
-        self.log('test_acc5', top_5_acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        if self.task == 'classification':
+           top_5_acc = self.tt5accuracy(F.softmax(y_hat, dim =1), y)
+           self.log('test_acc5', top_5_acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         return loss
 
