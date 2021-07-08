@@ -2,6 +2,8 @@ import os
 import itertools
 
 percentages = ["0.2 0.4 0.5 0.6 0.7 0.8 0.9 0.95 0.975 0.99 0.995 0.999 1.0"]
+percentages = ["0.3 0.6 0.8 0.9 0.95 0.975 0.99 0.975 0.999 1.0"]
+
 distances_allowed = ["0.02"]# 0.025 0.05 0.1"]
 first_epochs = [0]
 rest_epochs = [5]

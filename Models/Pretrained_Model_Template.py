@@ -13,9 +13,10 @@ import matplotlib.pyplot as plt
 
 
 class Pretrained_Model_Template(Weight_Fix_Base):
-    def __init__(self, original_model, max_epochs, data_module, lr, scheduler, opt):
+    def __init__(self, original_model, max_epochs, data_module, lr, scheduler, opt, hparams=None):
         super(Pretrained_Model_Template, self).__init__()
         dim_in = [3,32,32]
+        #self.save_hyperparameters(hparams)
         self.name = original_model.name
         self.pretrained = original_model
         self.max_epochs = max_epochs

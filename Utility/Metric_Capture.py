@@ -55,7 +55,7 @@ class Metric_Capture():
            self.outer_logger.experiment.add_scalar("Clusters/mean_distance", torch.mean(distances),iteration)
 
     def summarise_number_of_clusters(self, centroids, iteration):
-        number = len(centroids)
+        number = len(centroids[0])
         self.outer_logger.experiment.add_scalar("Clusters/number_of_clusters", number, iteration)
 
     def train_log(self, loss, acc, iteration):

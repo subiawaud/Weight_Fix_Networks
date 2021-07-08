@@ -139,10 +139,6 @@ class Weight_Fix_Base(pl.LightningModule):
             return self.optim
 
     def calculate_cluster_error_alpha(self, ce, cluster_error):
-        if self.current_fixing_iteration > self.number_of_fixing_iterations - self.how_many_iterations_not_regularised:
-            return 0
-        else:
-#            increase_factor = (self.number_of_fixing_iterations - self.current_fixing_iteration)
             alpha = ((self.regularisation_ratio*ce)/cluster_error).detach().clone().to(self.device)
             return alpha
 
@@ -239,6 +235,7 @@ class Weight_Fix_Base(pl.LightningModule):
         print(is_fixed.size(), closest_cluster_distance, clustered_weights)
         print(self.flattener.flatten_standard(self.is_fixed).size())
         self.centroid_to_regularise_to = centroids.detach()
+
         newly_fixed = self.determine_which_weights_are_newly_fixed(is_fixed, self.flattener.flatten_standard(self.is_fixed))
         threshold_val = self.calculate_threshold_value(closest_cluster_distance[newly_fixed])
         print('threshold val is', self.calculate_allowable_distance())
@@ -248,7 +245,6 @@ class Weight_Fix_Base(pl.LightningModule):
     #    self.reset_cluster_nums()
 
     def reset_cluster_nums(self):
-        self.number_of_clusters = 3
         self.converter.reset()
         
 
