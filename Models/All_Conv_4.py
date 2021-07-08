@@ -32,9 +32,6 @@ class All_Conv_4(Weight_Fix_Base):
 
     def set_optim(self, epochs):
            self.optim = torch.optim.Adam(self.parameters(), lr = self.lr)
-#           self.scheduler =   torch.optim.lr_scheduler.OneCycleLR(self.optim, max_lr=self.lr,
-#                                                                         steps_per_epoch=45000//256,
-#                                                                         epochs=epochs+1)
 
 
     def forward(self, x):
