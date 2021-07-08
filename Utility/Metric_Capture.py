@@ -22,9 +22,13 @@ class Metric_Capture():
             res_file = pd.DataFrame(columns = self.get_results_columns())
             res_file.to_csv(self.results_file, index=False)
 
-    def set_loggers(self, inner, outer):
+    def set_inner_logger(self,inner):
         self.inner_logger = inner
+
+    def set_outer_logger(self, outer):
+        print('SETTTINg the outer', outer)
         self.outer_logger = outer
+        print('the outer logger is ', self.outer_logger)
 
     def write_to_results_file(self, exp_name, model_name, regularistion_ratio,
     distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, compressed_acc, compressed_entropy, non_zero_entropy, unique_params, data_name, zero_distance, bn):
@@ -64,18 +68,17 @@ class Metric_Capture():
            self.inner_logger.experiment.add_scalar("Accuracy/Val", acc, iteration)
 
     def test_log(self, loss, acc, percentage_fixed, iteration):
-        if not self.outer_logger is None:
+           print(self.outer_logger, ' This is the logger of loggers')
            self.outer_logger.experiment.add_scalar("Loss/Test", loss, iteration)
            self.outer_logger.experiment.add_scalar("Accuracy/Test", acc, iteration)
            self.outer_logger.experiment.add_scalar("Fixed_Percentage", percentage_fixed, iteration)
 
     def summarise_clusters_selected(self, centroids, distances,mean_plus_std, distance_allowed, iteration):
-        if not self.outer_logger is None:
-           self.summarise_max_distance(torch.max(distances), iteration)
-           self.summarise_mean_plus_std(mean_plus_std, iteration)
-           self.summarise_distance_allowed(distance_allowed, iteration)
-           self.summarise_distance_values(distances, iteration)
-           self.summarise_number_of_clusters(centroids, iteration)
+          self.summarise_max_distance(torch.max(distances), iteration)
+          self.summarise_mean_plus_std(mean_plus_std, iteration)
+          self.summarise_distance_allowed(distance_allowed, iteration)
+          self.summarise_distance_values(distances, iteration)
+          self.summarise_number_of_clusters(centroids, iteration)
 
 
     def split_bias_and_weight_histogram(self,label, name, p):

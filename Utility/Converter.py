@@ -3,9 +3,8 @@ import torch
 import numpy as np
 
 class Converter():
-    def __init__(self, cluster_bit_fix, distance_type, zero_distance,device):
+    def __init__(self, distance_type, zero_distance,device):
         self.pow_2_level = 0
-        self.cluster_bit_fix = cluster_bit_fix
         self.distance_type = distance_type
         self.zero_distance = zero_distance
         self.device = device
@@ -46,13 +45,4 @@ class Converter():
         return current
 
     def round_to_precision(self, weights, distance):
-        if self.cluster_bit_fix == '32':
-           return weights
-        elif self.cluster_bit_fix == '16':
-           return np.float16(weights)
-        elif self.cluster_bit_fix == 'pow_2':
-           return self.convert_to_pows_of_2(weights)
-        elif self.cluster_bit_fix == 'pow_2_add':
-           return self.convert_to_add_pows_of_2(weights, distance)
-        else:
-           raise ValueError
+        return self.convert_to_add_pows_of_2(weights, distance)

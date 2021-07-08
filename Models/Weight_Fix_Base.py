@@ -19,42 +19,37 @@ from Utility.Flattener import Flattener
 from Utility.Metric_Capture import Metric_Capture
 from Utility.Parameter_Iterator import *
 from scipy.stats import entropy
-from kmeans_pytorch import kmeans
-
 
 
 class Weight_Fix_Base(pl.LightningModule):
     __metaclass_= abc.ABCMeta # to allow for abstract method implementations
-    def __init__(self, task_type):
+    def __init__(self):
         super(Weight_Fix_Base, self).__init__()
         self.current_fixing_iteration = 0 # which iteration of the fixing algorithm are we at
         self.name = 'Base'  # object name
         self.tracking_gradients = False
         self.percentage_fixed = 0
         self.layers_fixed = None
-        self.task_type = task_type
-        if self.task_type == 'classification':
-            self.taccuracy = pl.metrics.Accuracy()
-            self.ttaccuracy = pl.metrics.Accuracy()
-            self.tt5accuracy = pl.metrics.Accuracy(top_k=5)
-            self.vaccuracy = pl.metrics.Accuracy()
-        else:
-            self.taccuracy = pl.metrics.IOU()
-            self.ttaccuracy = pl.metrics.IOU()
-            self.vaccuracy = pl.metrics.IOU()
+        self.taccuracy = pl.metrics.Accuracy()
+        self.ttaccuracy = pl.metrics.Accuracy()
+        self.tt5accuracy = pl.metrics.Accuracy(top_k=5)
+        self.vaccuracy = pl.metrics.Accuracy()
 
-    def reset_optim(self, max_epochs):
+    def reset_optim(self, max_epochs, inner, outer):
         self.max_epochs = max_epochs
         self.set_optim(max_epochs, self.lr)
         self.parameter_iterator = Parameter_Iterator(self, self.layers_fixed)
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
         self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, self.zero_distance, self.device)
-        self.metric_logger = Metric_Capture(self)
+        self.metric_logger = Metric_Capture(self, inner, outer)
 
-    def set_loggers(self, inner, outer):
-        self.metric_logger.set_loggers(inner, outer)
+    def set_inner_logger(self, inner):
+        self.metric_logger.set_inner_logger(inner)
 
-    def set_up(self, distance_calculation_type, cluster_bit_fix, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio, how_many_iterations_not_regularised, zero_distance, bn_inc):
+    def set_outer_logger(self, outer):
+        self.metric_logger.set_outer_logger(outer)
+
+    def set_up(self, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio,  zero_distance, bn_inc):
         if bn_inc:
                 print('BATCH NORM included')
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d)
@@ -65,19 +60,15 @@ class Weight_Fix_Base(pl.LightningModule):
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
         self.set_inital_weights()
-        self.calculation_type = distance_calculation_type
+        self.calculation_type = 'relative'
         self.distance_calculator = Distance_Calculation(self.calculation_type)
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
         self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance, self.device)
         self.metric_logger = Metric_Capture(self)
-
-        self.converter = Converter(cluster_bit_fix, distance_calculation_type, zero_distance, self.device)
+        self.converter = Converter(self.calculation_type, zero_distance, self.device)
         self.smallest_distance_allowed = smallest_distance_allowed
-        self.cluster_bit_fix = cluster_bit_fix
         self.number_of_fixing_iterations = number_of_fixing_iterations
-        self.how_many_iterations_not_regularised = how_many_iterations_not_regularised
         self.regularisation_ratio = regularisation_ratio
-        self.number_of_clusters = 3
 
     def set_up_fixed_weight_array(self):
         self.fixed_weights = self.parameter_iterator.iteratate_all_parameters_and_append([], append_zeros=True)
@@ -166,10 +157,10 @@ class Weight_Fix_Base(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        ce = F.cross_entropy(y_hat, y)
-        cluster_error = self.calculate_cluster_error(ce)
-        loss = cluster_error + ce
         acc = self.taccuracy(F.softmax(y_hat, dim=1), y)
+        loss = F.cross_entropy(y_hat, y)
+        cluster_error = self.calculate_cluster_error(loss)
+        loss += cluster_error
         self.log('train_loss',loss, prog_bar=False, logger = False, sync_dist=True, on_epoch=True)
         return loss
 
@@ -209,7 +200,7 @@ class Weight_Fix_Base(pl.LightningModule):
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
-        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
+        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)//5))
         return a
 
     def calculate_how_many_to_fix(self, weights, percentage):
@@ -297,8 +288,10 @@ class Weight_Fix_Base(pl.LightningModule):
         acc = self.ttaccuracy(F.softmax(y_hat, dim =1), y)
         self.log('test_loss', loss, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         self.log('test_acc', acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
-        if self.task == 'classification':
-           top_5_acc = self.tt5accuracy(F.softmax(y_hat, dim =1), y)
-           self.log('test_acc5', top_5_acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
+        top_5_acc = self.tt5accuracy(F.softmax(y_hat, dim =1), y)
+        self.log('test_acc5', top_5_acc, logger=True, sync_dist=True, on_step=True, on_epoch=True)
         return loss
+
+    def test_epoch_end(self, o):
+        self.log('test_acc_epoch', self.ttaccuracy.compute())
 
