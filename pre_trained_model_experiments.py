@@ -1,5 +1,6 @@
 import torch
 import time
+from pytorch_lightning.plugins import DDPPlugin
 from Models.Pretrained_Model_Template import Pretrained_Model_Template
 from Datasets import cifar10, mnist, imagenet, coco
 import pytorch_lightning as pl
@@ -15,18 +16,18 @@ from Models.All_Conv_4 import All_Conv_4
 import re
 import numpy as np
 
-LOCAL = True
+LOCAL = False
 
-def run_the_model_with_no_training(outer_logger, model, data):
+def run_the_model_with_no_training(outer_logger, model, data, address, exp_n):
         inner_logger = TensorBoardLogger(
-                save_dir = f'{checkpoint_address}/experiments/',
+                save_dir = f'{address}/experiments/',
                 version = f'baseline',
-                name = experiment_name
+                name = exp_n
                 )
-        trainer = pl.Trainer(gpus=-1, precision=16, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+        trainer = pl.Trainer(gpus=-1, precision=16, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False,plugins=DDPPlugin(find_unused_parameters=False))
         model.reset_optim(0, inner_logger, outer_logger)
         trainer.fit(model, data)
-        return model
+        return trainer, model
 
 def make_address(dr):
     if not os.path.exists(dr):
@@ -37,7 +38,7 @@ def make_address(dr):
 
 
 def grab_checkpoint_model(address, inner_logger, outer_logger, iterations):
-    model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, use_sched=model.use_sched,opt= model.opt)
+    model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
     model.set_up(distance_allowed, iterations, regularistion_ratio, zd, bn)
     model.reset_optim(epochs, logger, outer_logger)
      
@@ -58,11 +59,11 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 )
 
     if check_point > 0.0:
-        run_the_model_with_no_training(outer_logger, model, data)
+        trainer, model  = run_the_model_with_no_training(outer_logger, model, data, checkpoint_address, experiment_name)
         orig_acc = trainer.test(model)[0]['test_acc_epoch']
         orig_entropy = model.get_weight_entropy()
         orig_params = model.get_number_of_u_params()
-        model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_{check_point}_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, use_sched=model.use_sched,opt= model.opt)
+        model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_{check_point}_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
         model.set_up(distance_allowed, len(percentages), regularistion_ratio, zd, bn)
 
     for i,x in enumerate(percentages):
@@ -84,13 +85,14 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
 
 
         if torch.cuda.is_available():
+               print('I HAVE GPUS')
                gpus = -1
                accelerator='ddp' 
         else:
                gpus=0
                accelerator=None
-        trainer = pl.Trainer(gpus=gpus, max_epochs = epochs, gradient_clip_val=0.5, accelerator=accelerator, logger = inner_logger, num_sanity_val_steps = 0,
-                             checkpoint_callback=False)
+        trainer = pl.Trainer(gpus=gpus, max_epochs = epochs, gradient_clip_val=0.5, logger = inner_logger, num_sanity_val_steps = 0,
+                             checkpoint_callback=False, plugins=DDPPlugin(find_unused_parameters=False), accelerator=accelerator)
 
         trainer.fit(model, data)
 
@@ -115,12 +117,12 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
                 version = f'final',
                 name = experiment_name
                 )
-    time.sleep(30)
+    time.sleep(60)
     model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
 
     model.set_up(distance_allowed, len(percentages), regularistion_ratio, zd, bn)
     model.reset_optim(epochs, logger, outer_logger)
-    trainer = pl.Trainer(gpus=1, gradient_clip_val = 0.5, accelerator='ddp', max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
+    trainer = pl.Trainer(gpus=-1, gradient_clip_val = 0.5, accelerator=accelerator, max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
     trainer.fit(model, data)
     model.print_unique_params()
     print('The final test is running')
@@ -140,6 +142,16 @@ def get_model(model_name, data):
     if model_name == 'resnet18' and data == 'cifar10':
         model = resnet18(pretrained=True)
 
+    if model_name == 'resnet34':# and data == 'imnet':
+        model = models.resnet34(pretrained=False)
+#        torch.save(model.state_dict(), "Pretrained_Models/PyTorch_ImNet/resnet34")
+        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet34"))
+
+    if model_name == 'googlenet':
+        model = models.googlenet(pretrained=False, aux_logits = False)
+#        torch.save(model.state_dict(), 'Pretrained_Models/PyTorch_ImNet/googlenet')
+        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/googlenet"))
+       
     if model_name == 'resnet18' and data == 'imnet':
         model = models.resnet18(pretrained=False)
         model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet18"))
@@ -147,6 +159,11 @@ def get_model(model_name, data):
     if model_name == 'resnet50': # and data == 'imnet':
         model = models.resnet50(pretrained=False)
         model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet50"))
+
+    if model_name == 'mobilenet' and data == 'imnet':
+        model = models.mobilenet_v2(pretrained=False)
+        #torch.save(model.state_dict(), 'Pretrained_Models/PyTorch_ImNet/mobilenet')
+        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/mobilenet"))
 
     if model_name == 'mobilenet' and data == 'cifar10':
         model = mobilenet_v2(pretrained=True)
@@ -172,17 +189,18 @@ def main(args):
 
 
 if __name__ == "__main__":
+    print('NCCL VERSIONNNN', torch.cuda.nccl.version())
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.3, 0.6, 0.8, 0.9, 0.95, 0.975, 0.999,  1.0])
     parser.add_argument('--optimiser', default='ADAM')
-    parser.add_argument('--experiment_name', default='set_1')
+    parser.add_argument('--experiment_name', default='final')
     parser.add_argument('--scheduler', default='None')
     parser.add_argument('--lr', type=float, default=0.00002)
     parser.add_argument('--first_epoch', type=int, default =0)
     parser.add_argument('--fixing_epochs', type=int, default = 3)
     parser.add_argument('--regularistion_ratio', default = 0.2, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
-    parser.add_argument('--model', default = 'conv4')
+    parser.add_argument('--model', default = 'googlenet')
     parser.add_argument('--dataset', default = 'cifar10')
     parser.add_argument('--zero_distance', default = 2**-7, type=float)
     parser.add_argument('--bn_inc', default=0.0, type=float)

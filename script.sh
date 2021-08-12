@@ -7,13 +7,15 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=cc2u18@soton.ac.uk
-#SBATCH --time=60:00:00
+#SBATCH --time=90:00:00
 #SBATCH --gres-flags=enforce-binding
 
 module load conda
-source activate pytorch_env
+source activate pytorch
 export NCCL_DEBUG=INFO
 export PYTHONFAULTHANDLER=1
+export NCCL_NSOCKS_PERTHREAD=4
+export NCCL_SOCKET_NTHREADS=2
 
 #export  NCCL_SOCKET_IFNAME=^docker0,lo
 

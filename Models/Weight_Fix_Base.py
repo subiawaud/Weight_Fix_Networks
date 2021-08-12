@@ -1,5 +1,4 @@
 import math
-import seaborn as sns
 import copy
 import torch
 import abc
@@ -196,7 +195,7 @@ class Weight_Fix_Base(pl.LightningModule):
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
-        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)//5))
+        a = max(self.smallest_distance_allowed, self.smallest_distance_allowed*((self.number_of_fixing_iterations - self.current_fixing_iteration)))
         return a
 
     def calculate_how_many_to_fix(self, weights, percentage):
@@ -229,8 +228,8 @@ class Weight_Fix_Base(pl.LightningModule):
         weights = self.flattener.flatten_network_tensor()
         percentage = self.percentage_fixed
         number_fixed = self.calculate_how_many_to_fix(weights, percentage)
-        centroids, is_fixed, closest_cluster_distance, clustered_weights = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
-        print('centroids chosen', centroids)
+        centroids, is_fixed, closest_cluster_distance, clustered_weights, order_dist = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
+        print('centroids chosen', centroids, 'order dist', order_dist)
         print('is fixed chosen', torch.sum(is_fixed))
         print(is_fixed.size(), closest_cluster_distance, clustered_weights)
         print(self.flattener.flatten_standard(self.is_fixed).size())
@@ -240,7 +239,8 @@ class Weight_Fix_Base(pl.LightningModule):
         threshold_val = self.calculate_threshold_value(closest_cluster_distance[newly_fixed])
         print('threshold val is', self.calculate_allowable_distance())
         print('current val  ', threshold_val)
-        self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration)
+        entropy_m, _ = self.get_weight_entropy()
+        self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration, order_dist, entropy_m)
         self.assign_weights_to_clusters(clustered_weights.detach(), is_fixed.detach())
     #    self.reset_cluster_nums()
 

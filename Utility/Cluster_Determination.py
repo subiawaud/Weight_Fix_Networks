@@ -195,13 +195,14 @@ class Cluster_Determination():
         #is_fixed = self.flattener.flatten_standard(self.is_fixed).detach()
         is_fixed = torch.zeros_like(weights).bool().detach()
         taken = 0
-        ap2 = 0
+        order = 0
         to_take = int(len(weights)*percent)
         clusters = []
+        orders = np.zeros(15)
         distances = torch.zeros_like(weights).type_as(weights)
         a = dist_allowed #we separate this in order to allow distance allowed to grow but not the cluster distribution
         while(taken < to_take):
-           vals = self.create_possible_centroids(torch.max(weights[~is_fixed]), torch.min(weights[~is_fixed]), dist_allowed, ap2).type_as(weights)
+           vals = self.create_possible_centroids(torch.max(weights[~is_fixed]), torch.min(weights[~is_fixed]), dist_allowed, order).type_as(weights)
            print('these are the values', vals)
            print('i am a', a)
            print('i am the distance allowed', dist_allowed)
@@ -216,16 +217,20 @@ class Cluster_Determination():
            is_fixed[parent_idx] = True
            print('taking', len(indicies))
            if len(indicies) == 0:
-               print('increasing ap2', ap2)
-               ap2 += 1
-               if ap2 > 10:
+               print('increasing order', order)
+               order += 1
+               if order > 20:
                    a *= 2
            else:
+                if order < 15:
+                    orders[order] += len(indicies)
+                else:
+                    orders[14] += len(indicies)
                 a = dist_allowed
         clusters = torch.unique(torch.Tensor(clusters))
         self.is_fixed_flat = is_fixed.to(self.device)
         self.not_fixed = torch.where(~self.is_fixed_flat)[0].to(dev)
-        return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights
+        return clusters.unsqueeze(0), self.is_fixed_flat, distances, weights, orders
 
     def get_cluster_assignment_prob(self, cluster_centers, requires_grad = False):
         distances, not_fixed_weights = self.get_cluster_distances(cluster_centers = cluster_centers,requires_grad =  requires_grad)

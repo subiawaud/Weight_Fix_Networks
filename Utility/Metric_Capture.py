@@ -58,6 +58,10 @@ class Metric_Capture():
         number = len(centroids[0])
         self.outer_logger.experiment.add_scalar("Clusters/number_of_clusters", number, iteration)
 
+    def summarise_order_dist(self, order_dist, iteration):
+        for i, o in enumerate(order_dist):
+            self.outer_logger.experiment.add_scalar(f"Clusters/Order_{i}", int(o), iteration)
+        
     def train_log(self, loss, acc, iteration):
            self.inner_logger.experiment.add_scalar("Loss/Train", loss, iteration)
            self.inner_logger.experiment.add_scalar("Accuracy/Train", acc, iteration)
@@ -73,12 +77,18 @@ class Metric_Capture():
            self.outer_logger.experiment.add_scalar("Accuracy/Test", acc, iteration)
            self.outer_logger.experiment.add_scalar("Fixed_Percentage", percentage_fixed, iteration)
 
-    def summarise_clusters_selected(self, centroids, distances,mean_plus_std, distance_allowed, iteration):
+
+    def summarise_entropy(self, entropy, iteration):
+         self.outer_logger.experiment.add_scalar('Clusters/Entropy', entropy, iteration)
+
+    def summarise_clusters_selected(self, centroids, distances,mean_plus_std, distance_allowed, iteration, order_dist, entropy):
           self.summarise_max_distance(torch.max(distances), iteration)
           self.summarise_mean_plus_std(mean_plus_std, iteration)
           self.summarise_distance_allowed(distance_allowed, iteration)
           self.summarise_distance_values(distances, iteration)
           self.summarise_number_of_clusters(centroids, iteration)
+          self.summarise_order_dist(order_dist, iteration)
+          self.summarise_entropy(entropy, iteration)
 
 
     def split_bias_and_weight_histogram(self,label, name, p):
