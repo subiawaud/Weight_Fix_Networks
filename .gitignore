@@ -144,3 +144,11 @@ Pretrained_Models copy/Pytorch_ImNet
 script.sh
 Comparison_Models/.DS_Store
 Results.csv
+Datasets/cifar-10-python.tar.gz
+Datasets/cifar-10-batches-py/batches.meta
+Datasets/cifar-10-batches-py/data_batch_1
+Datasets/cifar-10-batches-py/data_batch_2
+Datasets/cifar-10-batches-py/data_batch_3
+Datasets/cifar-10-batches-py/data_batch_4
+Datasets/cifar-10-batches-py/data_batch_5
+Datasets/cifar-10-batches-py/test_batch

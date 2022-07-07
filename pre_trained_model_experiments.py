@@ -12,10 +12,11 @@ import argparse
 import torchvision.models as models
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from Models.All_Conv_4 import All_Conv_4
+from PyTorch_CIFAR10.cifar10_models import mobilenet_v2, resnet18
 import re
 import numpy as np
 
-LOCAL = False
+LOCAL = True # set to false when using SLURM manager 
 
 def run_the_model_with_no_training(outer_logger, model, data, address, exp_n):
         inner_logger = TensorBoardLogger(
@@ -41,7 +42,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     if not LOCAL:
        checkpoint_address = '/scratch/cc2u18/Weight_Fix_Networks/'
     else:
-       checkpoint_address = '/'
+       checkpoint_address = ''
     dr = f'{checkpoint_address}/experiments/{experiment_name}'
     make_address(dr)
 
@@ -183,15 +184,15 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) 
-    parser.add_argument('--percentages', nargs='+', type=float, default = [0.3, 0.6, 0.8, 0.9, 0.95, 0.975, 0.999,  1.0])
+    parser.add_argument('--percentages', nargs='+', type=float, default = [0.3, 0.6, 0.8, 0.9, 0.95, 0.975, 0.99, 0.9975, 0.999,  1.0])
     parser.add_argument('--optimiser', default='ADAM')
-    parser.add_argument('--experiment_name', default='retry')
+    parser.add_argument('--experiment_name', default='new_experiment')
     parser.add_argument('--scheduler', default='None')
     parser.add_argument('--lr', type=float, default=0.00002)
     parser.add_argument('--first_epoch', type=int, default =0)
-    parser.add_argument('--fixing_epochs', type=int, default = 3)
-    parser.add_argument('--regularistion_ratio', default = 0.2, type=float) 
-    parser.add_argument('--model', default = 'googlenet')
+    parser.add_argument('--fixing_epochs', type=int, default = 5)
+    parser.add_argument('--regularistion_ratio', default = 0.4, type=float) 
+    parser.add_argument('--model', default = 'resnet18')
     parser.add_argument('--dataset', default = 'cifar10')
     parser.add_argument('--zero_distance', default = 2**-7, type=float)
     parser.add_argument('--bn_inc', default=0.0, type=float)
