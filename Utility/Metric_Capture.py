@@ -26,9 +26,7 @@ class Metric_Capture():
         self.inner_logger = inner
 
     def set_outer_logger(self, outer):
-        print('SETTTINg the outer', outer)
         self.outer_logger = outer
-        print('the outer logger is ', self.outer_logger)
 
     def write_to_results_file(self, exp_name, model_name, regularistion_ratio,
     distance_allowed, fixing_epochs, orig_acc, orig_entropy, orig_params, compressed_acc, compressed_entropy, non_zero_entropy, unique_params, data_name, zero_distance, bn):
@@ -72,7 +70,6 @@ class Metric_Capture():
            self.inner_logger.experiment.add_scalar("Accuracy/Val", acc, iteration)
 
     def test_log(self, loss, acc, percentage_fixed, iteration):
-           print(self.outer_logger, ' This is the logger of loggers')
            self.outer_logger.experiment.add_scalar("Loss/Test", loss, iteration)
            self.outer_logger.experiment.add_scalar("Accuracy/Test", acc, iteration)
            self.outer_logger.experiment.add_scalar("Fixed_Percentage", percentage_fixed, iteration)

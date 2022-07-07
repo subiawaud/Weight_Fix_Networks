@@ -60,7 +60,6 @@ class Cluster_Determination():
         return distances
 
     def closest_cluster(self,weights,  clusters, iteration):
-        print('calling closest cluster', clusters, clusters.size())
         flattened_weights = self.flattener.flatten_network_tensor()
         flatten_is_fixed = self.is_fixed_flat
         distances = torch.ones(flattened_weights.size()[0], clusters.size()[1]).to('cuda') # create a zero matrix for each of the distances to clusters
@@ -71,9 +70,6 @@ class Cluster_Determination():
         closest_cluster, closest_cluster_index =  torch.min(distances, dim=1)
         if self.distance_type == 'relative':
             small = (torch.abs(weights) < self.zero_distance)
-            print('index of small', torch.where(small))
-            print('percent small', torch.sum(small))
-            print(len(weights))
             closest_cluster[~small] = torch.abs(closest_cluster[~small] / (weights[~small]))
 #            closest_cluster[small] = 0
         return closest_cluster, closest_cluster_index
@@ -96,9 +92,7 @@ class Cluster_Determination():
                  vals[i] = ma
                  ma = self.get_clusters(ma, a)
                  i += 1
-           print('vals before', vals[:40])
            pw = torch.unique(self.convert_to_add_pows_of_2(torch.Tensor(vals),a, powl))
-           print('vals after', pw[:40])
            return torch.unique(torch.cat([torch.flip(-pw, [0]), pw]))
 
 
@@ -119,9 +113,7 @@ class Cluster_Determination():
         if torch.sum((local_cluster_distances[sorted_indexes] <= 0.00)) > 1:
             first_larger_than_zero = min(np.max(np.where(local_cluster_distances[sorted_indexes]  <=  0.00)[0])+1, len(sorted_indexes))  # which is the first distance > 0
         else:
-            print('none <= 0')
             first_larger_than_zero = 0
-        print('fltz', first_larger_than_zero)
 
         #zero will be from previous  assignments usually )
 
@@ -129,22 +121,15 @@ class Cluster_Determination():
         divide_by[first_larger_than_zero:] = np.arange(1, len(sorted_indexes) - first_larger_than_zero + 1)
 
         rolling_mean = np.cumsum(local_cluster_distances[sorted_indexes]) / divide_by
-        print('rm', rolling_mean)
         try:
-            print('rolling < max dist', np.where(rolling_mean <= max_dist))
-            print('rolling < max dist 2', np.where(rolling_mean <= max_dist)[0])
             first_larger = np.max(np.where(rolling_mean <= max_dist)[0]) + 1
         except Exception as e:
-            print('in except', e)
             first_larger = 0
 
 
         if first_larger > to_cluster or (first_larger == 0 and local_cluster_distances[-1] <= max_dist):
-            print(1, first_larger > to_cluster)
-            print(2, (first_larger == 0 and local_cluster_distances[-1] <= max_dist))
             return sorted_indexes[:to_cluster], vals[am], local_cluster_distances[sorted_indexes[:to_cluster]]
         else:
-            print(3)
             return sorted_indexes[:first_larger], vals[am], local_cluster_distances[sorted_indexes[:first_larger]]
     
         
@@ -185,21 +170,15 @@ class Cluster_Determination():
         a = dist_allowed #we separate this in order to allow distance allowed to grow but not the cluster distribution
         while(taken < to_take):
            vals = self.create_possible_centroids(torch.max(weights[~is_fixed]), torch.min(weights[~is_fixed]), dist_allowed, order).type_as(weights)
-           print('these are the values', vals)
-           print('i am a', a)
-           print('i am the distance allowed', dist_allowed)
            needed = to_take - taken
            indicies, cluster, dist  = self.find_the_next_cluster(weights, is_fixed, vals, torch.where(vals==0), a, needed)
            parent_idx = np.arange(weights.size()[0])[~is_fixed.squeeze()][indicies]
-           print('the weights clustered =', weights[parent_idx])
            weights[parent_idx] = cluster
            distances[parent_idx] = dist#.unsqueeze(1)
            taken += len(indicies)
            clusters.append(cluster)
            is_fixed[parent_idx] = True
-           print('taking', len(indicies))
            if len(indicies) == 0:
-               print('increasing order', order)
                order += 1
                if order > 20:
                    a *= 2

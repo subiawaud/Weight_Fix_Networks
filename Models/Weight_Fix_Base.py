@@ -50,7 +50,6 @@ class Weight_Fix_Base(pl.LightningModule):
 
     def set_up(self, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio,  zero_distance, bn_inc, calculation_type):
         if bn_inc:
-                print('BATCH NORM included')
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d)
         else:
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d)
@@ -107,14 +106,10 @@ class Weight_Fix_Base(pl.LightningModule):
                 c_z = np.delete(c, v.index(0.))
         except:
 	        c_z = c
-	        print('no zero entry')
         c = np.array(c) / np.sum(c)
         c_z = np.array(c_z) / np.sum(c_z)
         return entropy(c, base=2), entropy(c_z, base=2)
 
-    def on_epoch_start(self):
-        if self.current_epoch == 0:
-            print('starting')
 
     @abc.abstractmethod
     def forward(self, x):
@@ -134,7 +129,6 @@ class Weight_Fix_Base(pl.LightningModule):
         if self.scheduler is not None:
             return self.optim, [scheduler]
         else:
-            print('no scheduler')
             return self.optim
 
     def calculate_cluster_error_alpha(self, ce, cluster_error):
@@ -184,14 +178,9 @@ class Weight_Fix_Base(pl.LightningModule):
         currently_fixed_indicies = np.argwhere(flattened_network.cpu())
         new_fixed = np.setdiff1d(np.argwhere(fixed.cpu()), currently_fixed_indicies)
 #        new_fixed = np.setdiff1d(np.union1d(idx, currently_fixed_indicies), np.intersect1d(idx, currently_fixed_indicies))
-        print('currently fixed indicies', currently_fixed_indicies)
-        print('newly fixed indexes', new_fixed)
         return new_fixed
 
     def calculate_threshold_value(self, distances_of_newly_fixed):
-        print('distances to be fixed', distances_of_newly_fixed)
-        print('mean to be fixed', torch.mean(distances_of_newly_fixed))
-        print('max to be fixed', torch.max(distances_of_newly_fixed))
         return torch.mean(distances_of_newly_fixed) + 1*torch.std(distances_of_newly_fixed)
 
     def calculate_allowable_distance(self):
@@ -216,7 +205,6 @@ class Weight_Fix_Base(pl.LightningModule):
             start = count
             count += np.prod(s)
             self.is_fixed[i] = is_clustered_list[start:count].reshape(s) > 0
-            print(f'Fixed this layer {i} is {torch.sum(self.is_fixed[i])}')
             self.fixed_weights[i] = clustered_weights[start:count].reshape(s).to(self.device)
             fixed += torch.sum(self.is_fixed[i])
 
@@ -229,16 +217,10 @@ class Weight_Fix_Base(pl.LightningModule):
         percentage = self.percentage_fixed
         number_fixed = self.calculate_how_many_to_fix(weights, percentage)
         centroids, is_fixed, closest_cluster_distance, clustered_weights, order_dist = self.cluster_determinator.get_the_clusters(percentage, self.calculate_allowable_distance())
-        print('centroids chosen', centroids, 'order dist', order_dist)
-        print('is fixed chosen', torch.sum(is_fixed))
-        print(is_fixed.size(), closest_cluster_distance, clustered_weights)
-        print(self.flattener.flatten_standard(self.is_fixed).size())
         self.centroid_to_regularise_to = centroids.detach()
 
         newly_fixed = self.determine_which_weights_are_newly_fixed(is_fixed, self.flattener.flatten_standard(self.is_fixed))
         threshold_val = self.calculate_threshold_value(closest_cluster_distance[newly_fixed])
-        print('threshold val is', self.calculate_allowable_distance())
-        print('current val  ', threshold_val)
         entropy_m, _ = self.get_weight_entropy()
         self.metric_logger.summarise_clusters_selected(centroids, closest_cluster_distance[newly_fixed],threshold_val, self.smallest_distance_allowed, self.current_fixing_iteration, order_dist, entropy_m)
         self.assign_weights_to_clusters(clustered_weights.detach(), is_fixed.detach())

@@ -20,7 +20,6 @@ epoch_increment = 0
 iteration = 0.0
 params = list(itertools.product(*[percentages, distances_allowed, first_epochs, rest_epochs, bits, gammas, zeros, models, calculation_type]))
 for param_set in params:
-         print(param_set)
          percentage, da, f_e, r_e, b, gamma,z, model, ct = param_set
          script_test =f'--distance_allowed {da} --calculation_type {ct} --regularistion_ratio {gamma} --percentages {percentage} --first_epoch {f_e} --fixing_epochs {r_e}  --model {model} --zero_distance {z} --bn_inc {bn} --data {dataset} --resume {iteration}'
          os.system('sbatch script.sh '+ script_test)

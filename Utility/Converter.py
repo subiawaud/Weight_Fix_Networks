@@ -10,7 +10,6 @@ class Converter():
         self.device = device
 
     def increase_pow_2_level(self):
-        print('INCREASING POW LEVEL')
         self.pow_2_level += 1
 
     def reset(self):
@@ -39,7 +38,6 @@ class Converter():
                 diff_dist = distance
             to_change = torch.abs(diff) > diff_dist
             to_change = torch.logical_and(to_change, current !=0)
-            print('level', x, ' ', torch.sum(to_change), ' going further')
             next[to_change] = diff_pow_2[to_change]
             current = next + current
         return current

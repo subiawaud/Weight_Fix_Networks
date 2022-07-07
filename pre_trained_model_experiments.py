@@ -35,18 +35,13 @@ def make_address(dr):
         except:
             print('drive already exists')
 
-
-def grab_checkpoint_model(address, inner_logger, outer_logger, iterations, cal_type):
-    model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
-    model.set_up(distance_allowed, iterations, regularistion_ratio, zd, bn, cal_type)
-    model.reset_optim(epochs, logger, outer_logger)
      
 def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, regularistion_ratio, model_name, zd, bn, check_point = 0.0, cal_type='relative'):
     experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-e1={first_last_epochs}-fe={rest_epochs}-zd={zd}-bn={bn}-ct={cal_type}'
     if not LOCAL:
        checkpoint_address = '/scratch/cc2u18/Weight_Fix_Networks/'
     else:
-       checkpoint_address = '/home/chris/Dropbox/PhD_Projects/Weight_Fix_Networks/Weight_Fix_Networks/'
+       checkpoint_address = '/'
     dr = f'{checkpoint_address}/experiments/{experiment_name}'
     make_address(dr)
 
@@ -84,7 +79,6 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
 
 
         if torch.cuda.is_available():
-               print('I HAVE GPUS')
                gpus = -1
                accelerator='ddp' 
         else:
@@ -101,7 +95,6 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
             orig_params = model.get_number_of_u_params()
         else:
             acc = trainer.test(model)
-            print(acc)
         model.percentage_fixed = x
         model.apply_clustering_to_network()
         model.current_fixing_iteration +=1
@@ -124,7 +117,6 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     trainer = pl.Trainer(gpus=-1, gradient_clip_val = 0.5, accelerator=accelerator, max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
     trainer.fit(model, data)
     model.print_unique_params()
-    print('The final test is running')
     model.eval()
     acc = trainer.test(model, ckpt_path=None)[0]['test_acc_epoch']
     trainer.save_checkpoint(f'{checkpoint_address}/experiments/{experiment_name}/complete_final_model')
@@ -133,6 +125,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
 
 
 def get_model(model_name, data):
+    """ Here is where the models are defined, if you would like to use a new model, you can insert it into here """
 
     if model_name == 'conv4':
         model = All_Conv_4()
@@ -142,27 +135,27 @@ def get_model(model_name, data):
         model = resnet18(pretrained=True)
 
     if model_name == 'resnet34':# and data == 'imnet':
-        model = models.resnet34(pretrained=False)
+        model = models.resnet34(pretrained=True)
 #        torch.save(model.state_dict(), "Pretrained_Models/PyTorch_ImNet/resnet34")
-        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet34"))
+#        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet34"))
 
     if model_name == 'googlenet':
-        model = models.googlenet(pretrained=False, aux_logits = False)
+        model = models.googlenet(pretrained=True, aux_logits = False)
 #        torch.save(model.state_dict(), 'Pretrained_Models/PyTorch_ImNet/googlenet')
-        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/googlenet"))
+#        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/googlenet"))
        
     if model_name == 'resnet18' and data == 'imnet':
-        model = models.resnet18(pretrained=False)
+        model = models.resnet18(pretrained=True)
         model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet18"))
 
     if model_name == 'resnet50': # and data == 'imnet':
-        model = models.resnet50(pretrained=False)
-        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet50"))
+        model = models.resnet50(pretrained=True)
+#        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/resnet50"))
 
     if model_name == 'mobilenet' and data == 'imnet':
-        model = models.mobilenet_v2(pretrained=False)
+        model = models.mobilenet_v2(pretrained=True)
         #torch.save(model.state_dict(), 'Pretrained_Models/PyTorch_ImNet/mobilenet')
-        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/mobilenet"))
+#        model.load_state_dict(torch.load("Pretrained_Models/PyTorch_ImNet/mobilenet"))
 
     if model_name == 'mobilenet' and data == 'cifar10':
         model = mobilenet_v2(pretrained=True)
@@ -189,7 +182,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
+    parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) 
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.3, 0.6, 0.8, 0.9, 0.95, 0.975, 0.999,  1.0])
     parser.add_argument('--optimiser', default='ADAM')
     parser.add_argument('--experiment_name', default='retry')
@@ -197,7 +190,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.00002)
     parser.add_argument('--first_epoch', type=int, default =0)
     parser.add_argument('--fixing_epochs', type=int, default = 3)
-    parser.add_argument('--regularistion_ratio', default = 0.2, type=float) #0.075, 0.05, 0.025, 0.01, 0.1
+    parser.add_argument('--regularistion_ratio', default = 0.2, type=float) 
     parser.add_argument('--model', default = 'googlenet')
     parser.add_argument('--dataset', default = 'cifar10')
     parser.add_argument('--zero_distance', default = 2**-7, type=float)
@@ -205,5 +198,4 @@ if __name__ == "__main__":
     parser.add_argument('--resume',default=0.0, type=float)
     parser.add_argument('--calculation_type',default='relative')
     args = parser.parse_args()
-    print('This is the args ', args)
     main(args)
