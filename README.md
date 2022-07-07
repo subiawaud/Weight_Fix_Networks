@@ -10,7 +10,7 @@ This repo contains the Pytorch + Lightning code to apply the method proposed in 
 
 
 
-# Model Saves
+# Quantized Model Saves
 
 Below we link to the quantised model saves quoted in the results section of the paper. 
 
