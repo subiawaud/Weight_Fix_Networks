@@ -2,7 +2,7 @@
 
 <img src="https://user-images.githubusercontent.com/13983188/177870968-d26c4c87-6259-493a-b67e-8ccbc82dccbf.png" width="700">
 
-This repo contains the Pytorch + Lightning code to apply the method proposed in 'Weight Fixing Networks' published in ECCV 2021.
+This repo contains the Pytorch + Lightning code to apply the method proposed in 'Weight Fixing Networks' an accepted paper in ECCV 2021.
 
 
 
