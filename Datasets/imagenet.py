@@ -16,6 +16,7 @@ class ImageNet_Module(pl.LightningDataModule):
         def __init__(self, data_dir = 'Datasets/', shuffle_pixels=False, shuffle_labels=False, random_pixels=False):
                 super().__init__()
                 self.data_dir = '/ECSssd/data_sets/imagenet_2012'
+               # self.data_dir = '/ssdfs/datasets/imagenet_2012/'
                 self.mean = [0.485, 0.456, 0.406]
                 self.std = [0.229, 0.224, 0.225]
                 self.normalise = transforms.Normalize(mean=self.mean, std=self.std)
@@ -78,6 +79,7 @@ class ImageNet_Module(pl.LightningDataModule):
 
         def setup(self, stage=None):
                 if stage == 'fit' or stage is None:
+                        print('the data dir = ', self.data_dir)
                         im_full = ImageFolder(self.data_dir + '/train',  transform=self.transform)
                         train_s = int(len(im_full)*0.9)
                         val_s = len(im_full) - train_s

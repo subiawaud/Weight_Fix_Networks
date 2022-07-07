@@ -127,3 +127,20 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+Pretrained_Models copy/Coco/resnet50
+Pretrained_Models copy/PyTorch_ImNet/googlenet
+Pretrained_Models copy/PyTorch_ImNet/mobilenet
+Pretrained_Models copy/PyTorch_ImNet/resnet18
+Pretrained_Models copy/PyTorch_ImNet/resnet34
+Pretrained_Models copy/PyTorch_ImNet/resnet50
+Pretrained_Models/PyTorch_ImNet/resnet18
+Pretrained_Models/PyTorch_ImNet/resnet34
+Pretrained_Models/PyTorch_ImNet/resnet50
+Pretrained_Models/Pytorch_ImNet
+Pretrained_Models/Coco/resnet50
+Pretrained_Models/PyTorch_ImNet/googlenet
+Pretrained_Models/PyTorch_ImNet/mobilenet
+Pretrained_Models copy/Pytorch_ImNet
+script.sh
+Comparison_Models/.DS_Store
+Results.csv

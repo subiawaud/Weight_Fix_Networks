@@ -11,7 +11,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 import argparse
 import torchvision.models as models
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from Pretrained_Models.PyTorch_CIFAR10.cifar10_models import *
 from Models.All_Conv_4 import All_Conv_4
 import re
 import numpy as np
@@ -37,13 +36,13 @@ def make_address(dr):
             print('drive already exists')
 
 
-def grab_checkpoint_model(address, inner_logger, outer_logger, iterations):
+def grab_checkpoint_model(address, inner_logger, outer_logger, iterations, cal_type):
     model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
-    model.set_up(distance_allowed, iterations, regularistion_ratio, zd, bn)
+    model.set_up(distance_allowed, iterations, regularistion_ratio, zd, bn, cal_type)
     model.reset_optim(epochs, logger, outer_logger)
      
-def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, regularistion_ratio, model_name, zd, bn, check_point = 0.0):
-    experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-e1={first_last_epochs}-fe={rest_epochs}-zd={zd}-bn={bn}'
+def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs, percentages,distance_allowed, regularistion_ratio, model_name, zd, bn, check_point = 0.0, cal_type='relative'):
+    experiment_name = f'e={experiment_name}-m={model_name}-d={data.name}-rr={regularistion_ratio}-d_a={distance_allowed}-e1={first_last_epochs}-fe={rest_epochs}-zd={zd}-bn={bn}-ct={cal_type}'
     if not LOCAL:
        checkpoint_address = '/scratch/cc2u18/Weight_Fix_Networks/'
     else:
@@ -64,7 +63,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
         orig_entropy = model.get_weight_entropy()
         orig_params = model.get_number_of_u_params()
         model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_{check_point}_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
-        model.set_up(distance_allowed, len(percentages), regularistion_ratio, zd, bn)
+        model.set_up(distance_allowed, len(percentages), regularistion_ratio, zd, bn, cal_type)
 
     for i,x in enumerate(percentages):
         if x < check_point: # skip this iteration 
@@ -120,7 +119,7 @@ def run_experiment(experiment_name, model, data, first_last_epochs, rest_epochs,
     time.sleep(60)
     model = model.load_from_checkpoint(checkpoint_path=f'{checkpoint_address}/experiments/{experiment_name}/iteration_1.0_final_model',max_epochs=model.max_epochs, original_model=model.pretrained, data_module=model.data_module, lr= model.lr, scheduler=model.scheduler,opt= model.opt)
 
-    model.set_up(distance_allowed, len(percentages), regularistion_ratio, zd, bn)
+    model.set_up(distance_allowed, len(percentages), regularistion_ratio, zd, bn, cal_type)
     model.reset_optim(epochs, logger, outer_logger)
     trainer = pl.Trainer(gpus=-1, gradient_clip_val = 0.5, accelerator=accelerator, max_epochs = 0, logger = inner_logger, num_sanity_val_steps = 0, checkpoint_callback=False)
     trainer.fit(model, data)
@@ -184,17 +183,16 @@ def main(args):
     for d_a in args.distance_allowed:
             model = get_model(args.model, args.dataset)
             model = Pretrained_Model_Template(model, args.fixing_epochs + 1, data, args.lr, args.scheduler, args.optimiser, args)
-            model.set_up(d_a, len(args.percentages), args.regularistion_ratio, args.zero_distance, args.bn_inc)
-            run_experiment(args.experiment_name, model, data,args.first_epoch, args.fixing_epochs, args.percentages, d_a,  args.regularistion_ratio, args.model, args.zero_distance, args.bn_inc > 0.1, args.resume)
+            model.set_up(d_a, len(args.percentages), args.regularistion_ratio, args.zero_distance, args.bn_inc, args.calculation_type)
+            run_experiment(args.experiment_name, model, data,args.first_epoch, args.fixing_epochs, args.percentages, d_a,  args.regularistion_ratio, args.model, args.zero_distance, args.bn_inc > 0.1, args.resume, args.calculation_type)
 
 
 if __name__ == "__main__":
-    print('NCCL VERSIONNNN', torch.cuda.nccl.version())
     parser = argparse.ArgumentParser()
     parser.add_argument('--distance_allowed',  nargs='+', type=float, default = [0.075]) #0.1, 0.15, 0.2, 0.25, 0.3
     parser.add_argument('--percentages', nargs='+', type=float, default = [0.3, 0.6, 0.8, 0.9, 0.95, 0.975, 0.999,  1.0])
     parser.add_argument('--optimiser', default='ADAM')
-    parser.add_argument('--experiment_name', default='final')
+    parser.add_argument('--experiment_name', default='retry')
     parser.add_argument('--scheduler', default='None')
     parser.add_argument('--lr', type=float, default=0.00002)
     parser.add_argument('--first_epoch', type=int, default =0)
@@ -205,6 +203,7 @@ if __name__ == "__main__":
     parser.add_argument('--zero_distance', default = 2**-7, type=float)
     parser.add_argument('--bn_inc', default=0.0, type=float)
     parser.add_argument('--resume',default=0.0, type=float)
+    parser.add_argument('--calculation_type',default='relative')
     args = parser.parse_args()
     print('This is the args ', args)
     main(args)

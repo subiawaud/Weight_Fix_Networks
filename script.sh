@@ -20,4 +20,4 @@ export NCCL_SOCKET_NTHREADS=2
 #export  NCCL_SOCKET_IFNAME=^docker0,lo
 
 echo $@
-python /home/cc2u18/Weight_Fix_Networks/pre_trained_model_experiments.py $@
+python /home/cc2u18/Prev_WFN/Weight_Fix_Networks/pre_trained_model_experiments.py $@

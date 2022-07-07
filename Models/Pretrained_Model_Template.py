@@ -7,7 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 import torch.nn.utils.prune as prune
-from pytorch_lightning.metrics import functional as FM
+#from pytorch_lightning.metrics import functional as FM
+
 import matplotlib.pyplot as plt
 
 

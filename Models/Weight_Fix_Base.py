@@ -48,7 +48,7 @@ class Weight_Fix_Base(pl.LightningModule):
     def set_outer_logger(self, outer):
         self.metric_logger.set_outer_logger(outer)
 
-    def set_up(self, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio,  zero_distance, bn_inc):
+    def set_up(self, smallest_distance_allowed, number_of_fixing_iterations, regularisation_ratio,  zero_distance, bn_inc, calculation_type):
         if bn_inc:
                 print('BATCH NORM included')
                 self.layers_fixed = (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.BatchNorm2d, nn.BatchNorm1d)
@@ -59,8 +59,8 @@ class Weight_Fix_Base(pl.LightningModule):
         self.set_layer_shapes()
         self.set_up_fixed_weight_array()
         self.set_inital_weights()
-        self.calculation_type = 'relative'
-        self.distance_calculator = Distance_Calculation(self.calculation_type)
+        self.calculation_type = calculation_type
+        self.distance_calculator = Distance_Calculation(self.calculation_type, self.zero_distance)
         self.flattener = Flattener(self.parameter_iterator, self.is_fixed)
         self.cluster_determinator = Cluster_Determination(self.distance_calculator, self, self.is_fixed, self.calculation_type, self.layer_shapes, self.flattener, zero_distance, self.device)
         self.metric_logger = Metric_Capture(self)
